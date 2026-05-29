@@ -10,12 +10,17 @@ from selfaudit.datasets import (
     Check,
     Dataset,
     allowed_values,
+    check_from_spec,
+    checks_from_specs,
     distribution_stationary,
+    dump_rules,
     duplicate_rate_below,
     infer_checks,
+    infer_specs,
     iqr_outliers,
     load_csv,
     load_dataset,
+    load_rules,
     no_missing_required,
     parse_csv,
     parse_json,
@@ -320,6 +325,77 @@ def test_infer_checks_flags_a_planted_outlier_end_to_end() -> None:
     assert report.status == "review"
     assert "outliers[temperature]" in report.warnings
     assert report.failed_checks == []
+
+
+# --------------------------------------------------------------------------- #
+# Rules file: specs <-> checks round-trip
+# --------------------------------------------------------------------------- #
+
+
+def test_infer_specs_are_serializable_dicts() -> None:
+    rows = [{"ts": str(i), "temp": str(20 + i % 7), "tag": "A"} for i in range(40)]
+    specs = infer_specs(Dataset(["ts", "temp", "tag"], rows, "s"))
+    kinds = [s["check"] for s in specs]
+    assert "missing_required" in kinds and "outliers" in kinds and "monotonic" in kinds
+    # round-trips through JSON unchanged
+    assert load_rules(dump_rules(specs)) == specs
+
+
+def test_check_from_spec_builds_each_kind() -> None:
+    specs: list[dict] = [
+        {"check": "range", "field": "temperature", "lo": -50, "hi": 150},
+        {"check": "unique", "fields": ["timestamp"]},
+        {"check": "type", "field": "temperature", "type": "float"},
+        {"check": "allowed", "field": "temperature", "values": ["20", "21"]},
+        {"check": "missing_required", "fields": ["temperature"]},
+        {"check": "duplicate_rate"},
+        {"check": "outliers", "field": "temperature"},
+        {"check": "monotonic", "field": "timestamp"},
+        {"check": "stationary", "field": "temperature"},
+    ]
+    checks = checks_from_specs(specs)
+    assert [c.name for c in checks][:3] == [
+        "range[temperature]",
+        "unique[timestamp]",
+        "type[temperature=float]",
+    ]
+    # severity defaults applied from the spec kind
+    assert checks_from_specs([{"check": "range", "field": "x", "lo": 0, "hi": 1}])[0].severity == (
+        "fail"
+    )
+    assert checks_from_specs([{"check": "outliers", "field": "x"}])[0].severity == "warn"
+    # explicit severity override survives the round-trip
+    assert check_from_spec({"check": "outliers", "field": "x", "severity": "fail"}).severity == (
+        "fail"
+    )
+
+
+def test_check_from_spec_errors() -> None:
+    with pytest.raises(ValueError):
+        check_from_spec({"field": "x"})  # no 'check' key
+    with pytest.raises(ValueError):
+        check_from_spec({"check": "nonsense"})  # unknown kind
+    with pytest.raises(ValueError):
+        check_from_spec({"check": "range", "field": "x"})  # missing lo/hi
+
+
+def test_load_rules_rejects_bad_shape() -> None:
+    with pytest.raises(ValueError):
+        load_rules('{"no_checks_key": 1}')
+    with pytest.raises(ValueError):
+        load_rules("[1, 2, 3]")  # not an object
+
+
+def test_emit_then_scan_round_trip() -> None:
+    # The inferred rules, saved and reloaded, scan a clean dataset to TRUSTED.
+    ds = Dataset(
+        ["ts", "temp"],
+        [{"ts": str(i), "temp": str(20 + i % 5)} for i in range(40)],
+        "rt",
+    )
+    reloaded = checks_from_specs(load_rules(dump_rules(infer_specs(ds))))
+    report = SelfAuditingDatasetScanner(reloaded).scan(ds)
+    assert report.status in ("trusted", "review")  # no hard failures on clean data
 
 
 # --------------------------------------------------------------------------- #

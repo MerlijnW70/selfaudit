@@ -77,6 +77,20 @@ missing) **fail** → UNTRUSTED; “probably fine” findings (outliers, shifts)
 **warnings** → REVIEW. Exit codes: `0` trusted/review, `1` untrusted. Use
 `--strict` to fail on warnings too.
 
+### A stable rules file (for CI)
+
+Inference is great for a first look, but for a gate you want rules that don’t
+change under you. Save them once, edit, and commit:
+
+```bash
+selfaudit data.csv --emit-rules selfaudit.json   # writes the inferred rules
+# …edit selfaudit.json (tweak thresholds, add --unique/--type/--allowed rules)…
+selfaudit data.csv --rules selfaudit.json         # scan against the fixed contract
+```
+
+The file is plain JSON (a `"checks"` list), version-controllable, and exactly
+what you want a CI gate pinned to.
+
 ## Input formats
 
 CSV/TSV (delimiter, encoding & header **auto-detected** — incl. `;`-separated

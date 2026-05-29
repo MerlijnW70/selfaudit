@@ -25,10 +25,14 @@ from .datasets import (
     Check,
     Dataset,
     allowed_values,
+    checks_from_specs,
     distribution_stationary,
+    dump_rules,
     duplicate_rate_below,
     infer_checks,
+    infer_specs,
     load_dataset,
+    load_rules,
     no_missing_required,
     svg_chart,
     timestamps_monotonic,
@@ -206,6 +210,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="auto-propose checks from the data itself (zero-config; ignores rule flags)",
     )
     p.add_argument(
+        "--rules",
+        metavar="PATH",
+        help="scan against a saved rules file (JSON) instead of inferring",
+    )
+    p.add_argument(
+        "--emit-rules",
+        metavar="PATH",
+        help="write the inferred rules to PATH (edit, then re-run with --rules) and exit",
+    )
+    p.add_argument(
         "--strict",
         action="store_true",
         help="treat warnings as failures too (exit 1 on REVIEW, not just UNTRUSTED)",
@@ -265,19 +279,40 @@ def run(argv: list[str] | None = None) -> int:
         print(f"error: cannot read dataset — {exc}", file=sys.stderr)
         return 2
 
-    # Build checks: explicit rule flags if given, otherwise infer from the data.
-    try:
-        explicit = _checks_from_args(args)
-    except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    if args.infer or not explicit:
-        checks = infer_checks(ds)
-        if not args.quiet:
-            lead = "inferred" if args.infer else "no rules given — inferred"
-            print(f"{lead} {len(checks)} checks: {', '.join(c.name for c in checks)}\n")
+    # --emit-rules: write the inferred rules for this dataset and exit (a generate step).
+    if args.emit_rules:
+        try:
+            with open(args.emit_rules, "w", encoding="utf-8") as fh:
+                fh.write(dump_rules(infer_specs(ds)))
+        except OSError as exc:
+            print(f"error: cannot write rules — {exc}", file=sys.stderr)
+            return 2
+        target = args.csv or f"--source {args.source}"
+        print(f"wrote inferred rules to {args.emit_rules}")
+        print(f"edit it, then scan with:  selfaudit {target} --rules {args.emit_rules}")
+        return 0
+
+    # Build checks: a saved rules file wins, else explicit flags, else infer.
+    if args.rules:
+        try:
+            with open(args.rules, encoding="utf-8") as fh:
+                checks = checks_from_specs(load_rules(fh.read()))
+        except (OSError, ValueError) as exc:
+            print(f"error: bad rules file — {exc}", file=sys.stderr)
+            return 2
     else:
-        checks = explicit
+        try:
+            explicit = _checks_from_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if args.infer or not explicit:
+            checks = infer_checks(ds)
+            if not args.quiet:
+                lead = "inferred" if args.infer else "no rules given — inferred"
+                print(f"{lead} {len(checks)} checks: {', '.join(c.name for c in checks)}\n")
+        else:
+            checks = explicit
 
     report = SelfAuditingDatasetScanner(checks).scan(ds)
     if not args.quiet:

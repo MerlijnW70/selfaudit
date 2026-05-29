@@ -558,17 +558,100 @@ def _looks_numeric(ds: Dataset, field_name: str) -> list[float]:
     return []
 
 
-def infer_checks(ds: Dataset, *, missing_fraction: float = 0.01) -> list[Check]:
-    """Propose a sensible rule set from the data itself — zero configuration.
+_DEFAULT_SEVERITY = {
+    "missing_required": "fail",
+    "range": "fail",
+    "unique": "fail",
+    "type": "fail",
+    "allowed": "fail",
+    "monotonic": "warn",
+    "duplicate_rate": "warn",
+    "outliers": "warn",
+    "stationary": "warn",
+}
 
-    Always checks missing-value budget and duplicate rows; for each numeric
-    column with enough distinct values, adds an IQR-outlier and a regime-shift
-    check, plus a monotonic check for columns that look like an ordered sequence
-    (timestamps/ids). Categorical and low-cardinality columns are left alone.
+
+def check_from_spec(spec: dict) -> Check:
+    """Build a :class:`Check` from a serializable rule spec (one entry of a rules
+    file). Raises ``ValueError`` on an unknown or malformed spec."""
+    if not isinstance(spec, dict) or "check" not in spec:
+        raise ValueError(f"each rule needs a 'check' key, got {spec!r}")
+    kind = spec["check"]
+    sev = spec.get("severity", _DEFAULT_SEVERITY.get(kind, "fail"))
+    try:
+        if kind == "missing_required":
+            return no_missing_required(
+                spec["fields"], max_fraction=spec.get("max_fraction", 0.01), severity=sev
+            )
+        if kind == "range":
+            return values_in_range(
+                spec["field"],
+                spec["lo"],
+                spec["hi"],
+                max_fraction=spec.get("max_fraction", 0.0),
+                severity=sev,
+            )
+        if kind == "unique":
+            return unique_key(spec["fields"], severity=sev)
+        if kind == "type":
+            return values_of_type(
+                spec["field"],
+                spec["type"],
+                max_fraction=spec.get("max_fraction", 0.0),
+                severity=sev,
+            )
+        if kind == "allowed":
+            return allowed_values(spec["field"], spec["values"], severity=sev)
+        if kind == "monotonic":
+            return timestamps_monotonic(
+                spec["field"], max_fraction=spec.get("max_fraction", 0.0), severity=sev
+            )
+        if kind == "duplicate_rate":
+            return duplicate_rate_below(max_fraction=spec.get("max_fraction", 0.0), severity=sev)
+        if kind == "outliers":
+            return iqr_outliers(spec["field"], k=spec.get("k", 3.0), severity=sev)
+        if kind == "stationary":
+            return distribution_stationary(
+                spec["field"], max_shift=spec.get("max_shift", 3.0), severity=sev
+            )
+    except KeyError as exc:
+        raise ValueError(f"rule {kind!r} is missing required key {exc}") from exc
+    raise ValueError(f"unknown check kind: {kind!r}")
+
+
+def checks_from_specs(specs: Iterable[dict]) -> list[Check]:
+    return [check_from_spec(s) for s in specs]
+
+
+def dump_rules(specs: Iterable[dict]) -> str:
+    """Serialize rule specs to a JSON rules-file string (with a version header)."""
+    return json.dumps({"version": 1, "checks": list(specs)}, indent=2)
+
+
+def load_rules(text: str) -> list[dict]:
+    """Parse a JSON rules-file string into a list of specs."""
+    data = json.loads(text)
+    if not isinstance(data, dict) or not isinstance(data.get("checks"), list):
+        raise ValueError("rules file must be a JSON object with a 'checks' list")
+    return data["checks"]
+
+
+def infer_specs(ds: Dataset, *, missing_fraction: float = 0.01) -> list[dict]:
+    """Propose a sensible rule set from the data itself, as serializable specs —
+    the basis for both zero-config scanning and ``--emit-rules``.
+
+    Always a missing-value budget and a duplicate-row check; for each numeric
+    column with enough distinct values, an IQR-outlier and a regime-shift check,
+    plus a monotonic check for ordered (timestamp/index) columns. Categorical and
+    low-cardinality columns are left alone.
     """
-    checks: list[Check] = [
-        no_missing_required(ds.columns, max_fraction=missing_fraction),
-        duplicate_rate_below(max_fraction=0.0),
+    specs: list[dict] = [
+        {
+            "check": "missing_required",
+            "fields": list(ds.columns),
+            "max_fraction": missing_fraction,
+        },
+        {"check": "duplicate_rate", "max_fraction": 0.0},
     ]
     for col in ds.columns:
         present = _looks_numeric(ds, col)
@@ -576,14 +659,18 @@ def infer_checks(ds: Dataset, *, missing_fraction: float = 0.01) -> list[Check]:
             continue  # non-numeric, too sparse, or low-cardinality (codes/flags)
         decreases = sum(1 for a, b in zip(present, present[1:], strict=False) if b < a)
         is_ordered = decreases <= 0.05 * len(present) and present[-1] > present[0]
-        checks.append(iqr_outliers(col, k=3.0))
+        specs.append({"check": "outliers", "field": col, "k": 3.0})
         if is_ordered:
-            # An ordered sequence (timestamp/index): a monotonic check is meaningful,
-            # but a stationarity check is not — a trending mean is expected, not an anomaly.
-            checks.append(timestamps_monotonic(col))
+            specs.append({"check": "monotonic", "field": col})
         else:
-            checks.append(distribution_stationary(col, max_shift=3.0))
-    return checks
+            specs.append({"check": "stationary", "field": col, "max_shift": 3.0})
+    return specs
+
+
+def infer_checks(ds: Dataset, *, missing_fraction: float = 0.01) -> list[Check]:
+    """Zero-config rule set as ready-to-run :class:`Check` objects (see
+    :func:`infer_specs` for the underlying specs)."""
+    return checks_from_specs(infer_specs(ds, missing_fraction=missing_fraction))
 
 
 def _is_ordered(vals: list[float]) -> bool:

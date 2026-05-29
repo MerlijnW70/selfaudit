@@ -196,6 +196,28 @@ def test_run_infer_announces_inferred_checks(tmp_path, capsys) -> None:
     assert "inferred" in capsys.readouterr().out
 
 
+def test_run_emit_then_scan_with_rules(tmp_path, capsys) -> None:
+    csv = _write_csv(tmp_path, _CLEAN)
+    rules = tmp_path / "rules.json"
+    # 1) emit inferred rules -> writes a file, exits 0, does not scan
+    assert run([csv, "--emit-rules", str(rules)]) == 0
+    assert rules.exists()
+    assert json.loads(rules.read_text(encoding="utf-8"))["checks"]  # has a checks list
+    capsys.readouterr()
+    # 2) scan against the saved rules
+    code = run([csv, "--rules", str(rules), "--quiet"])
+    assert code == 0
+    assert "TRUSTED" in capsys.readouterr().out
+
+
+def test_run_bad_rules_file_is_error(tmp_path, capsys) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"oops": true}', encoding="utf-8")
+    csv = _write_csv(tmp_path, _CLEAN)
+    assert run([csv, "--rules", str(bad)]) == 2
+    assert "bad rules file" in capsys.readouterr().err
+
+
 def test_run_writes_html_report(tmp_path) -> None:
     csv = _write_csv(tmp_path, _DIRTY)
     out_html = tmp_path / "report.html"
