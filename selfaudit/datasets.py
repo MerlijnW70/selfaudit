@@ -85,6 +85,20 @@ def _all_numeric(cells: list[str]) -> bool:
     return seen
 
 
+def _unique_columns(raw: list[str]) -> list[str]:
+    """Make headers unique and non-empty: blanks become ``colN``, and duplicates
+    get a ``.2`` / ``.3`` suffix — so duplicate columns don't collapse (silent data
+    loss) or spawn redundant checks. (Dogfood: a multi-header file like
+    seaborn's brain_networks.)"""
+    out: list[str] = []
+    counts: dict[str, int] = {}
+    for i, cell in enumerate(raw):
+        name = cell.strip() or f"col{i + 1}"
+        counts[name] = counts.get(name, 0) + 1
+        out.append(name if counts[name] == 1 else f"{name}.{counts[name]}")
+    return out
+
+
 def parse_csv(text: str, name: str = "") -> Dataset:
     """Parse CSV/TSV *text* into a :class:`Dataset`.
 
@@ -104,7 +118,7 @@ def parse_csv(text: str, name: str = "") -> Dataset:
         columns = [f"col{i + 1}" for i in range(len(raw_rows[0]))]
         data = raw_rows
     else:
-        columns = [c.strip() for c in raw_rows[0]]
+        columns = _unique_columns(raw_rows[0])
         data = raw_rows[1:]
     rows = [{columns[i]: (r[i] if i < len(r) else "") for i in range(len(columns))} for r in data]
     return Dataset(columns, rows, name)
@@ -167,7 +181,7 @@ def _xlsx_to_dataset(source: object, name: str, sheet: str | None = None) -> Dat
     raw_rows = [r for r in raw_rows if any(c is not None and str(c).strip() != "" for c in r)]
     if not raw_rows:
         return Dataset([], [], name)
-    columns = [_stringify(c).strip() or f"col{i + 1}" for i, c in enumerate(raw_rows[0])]
+    columns = _unique_columns([_stringify(c) for c in raw_rows[0]])
     rows = [
         {columns[i]: _stringify(r[i]) if i < len(r) else "" for i in range(len(columns))}
         for r in raw_rows[1:]

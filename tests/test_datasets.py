@@ -89,6 +89,13 @@ def test_parse_csv_tab_delimiter() -> None:
     assert ds.rows[1]["a"] == "3"
 
 
+def test_parse_csv_dedupes_duplicate_and_blank_headers() -> None:
+    # Duplicate/blank headers must not collapse (data loss) — dogfood: brain_networks.
+    ds = parse_csv("a,a,,b\n1,2,3,4\n")
+    assert ds.columns == ["a", "a.2", "col3", "b"]
+    assert ds.rows[0] == {"a": "1", "a.2": "2", "col3": "3", "b": "4"}  # all 4 values kept
+
+
 def test_parse_csv_headerless_numeric() -> None:
     ds = parse_csv("1,2,3\n4,5,6\n")
     assert ds.columns == ["col1", "col2", "col3"]
