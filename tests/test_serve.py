@@ -6,6 +6,8 @@ import json
 import threading
 import urllib.request
 
+import pytest
+
 from selfaudit import serve
 from selfaudit.sources import SourceUnavailable
 
@@ -50,6 +52,25 @@ def test_scan_payload_empty_dataset() -> None:
     assert "no rows" in html
 
 
+def test_scan_payload_xlsx_upload() -> None:
+    # The browser sends an uploaded .xlsx as base64; the server decodes & scans it.
+    import base64
+    import io
+
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["city", "temp"])
+    for i in range(12):
+        ws.append([f"c{i}", 20 + i % 4])
+    buf = io.BytesIO()
+    wb.save(buf)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    html = serve.scan_payload({"mode": "xlsx", "value": b64, "name": "book.xlsx"})
+    assert "<!doctype html>" in html
+    assert "verdict" in html
+
+
 def test_scan_payload_url_mode(monkeypatch) -> None:
     from selfaudit.datasets import parse_csv
 
@@ -87,7 +108,7 @@ def test_server_serves_index_and_scans() -> None:
         base = f"http://127.0.0.1:{port}"
         index = urllib.request.urlopen(base + "/", timeout=5).read().decode()
         assert "selfaudit" in index
-        assert "Drop a CSV" in index
+        assert "Drop a file" in index
 
         body = json.dumps({"mode": "csv", "value": _CSV, "name": "t.csv"}).encode()
         req = urllib.request.Request(base + "/scan", body, {"Content-Type": "application/json"})

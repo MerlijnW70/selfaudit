@@ -152,30 +152,38 @@ def parse_text(text: str, name: str = "") -> Dataset:
     return parse_csv(text, name)
 
 
-def load_xlsx(path: str, *, name: str = "", sheet: str | None = None) -> Dataset:
-    """Load the first row as headers and the rest as data from an ``.xlsx`` file.
-
-    Requires the optional ``openpyxl`` package (``pip install selfaudit[excel]``).
-    """
+def _xlsx_to_dataset(source: object, name: str, sheet: str | None = None) -> Dataset:
+    """Shared Excel reader for a path or an in-memory file-like (uploaded bytes)."""
     try:
         from openpyxl import load_workbook
     except ImportError as exc:  # pragma: no cover - exercised only without openpyxl
         raise ValueError(
             "Excel support needs the optional 'openpyxl' package (pip install 'selfaudit[excel]')"
         ) from exc
-    workbook = load_workbook(path, read_only=True, data_only=True)
+    workbook = load_workbook(source, read_only=True, data_only=True)
     worksheet = workbook[sheet] if sheet else workbook.active
     raw_rows = [list(r) for r in worksheet.iter_rows(values_only=True)]
     workbook.close()
     raw_rows = [r for r in raw_rows if any(c is not None and str(c).strip() != "" for c in r)]
     if not raw_rows:
-        return Dataset([], [], name or path)
+        return Dataset([], [], name)
     columns = [_stringify(c).strip() or f"col{i + 1}" for i, c in enumerate(raw_rows[0])]
     rows = [
         {columns[i]: _stringify(r[i]) if i < len(r) else "" for i in range(len(columns))}
         for r in raw_rows[1:]
     ]
-    return Dataset(columns, rows, name or path)
+    return Dataset(columns, rows, name)
+
+
+def load_xlsx(path: str, *, name: str = "", sheet: str | None = None) -> Dataset:
+    """Load an ``.xlsx`` file (first row = headers). Needs the optional ``openpyxl``
+    package (``pip install selfaudit[excel]``)."""
+    return _xlsx_to_dataset(path, name or path, sheet)
+
+
+def parse_xlsx_bytes(raw: bytes, *, name: str = "") -> Dataset:
+    """Parse ``.xlsx`` content from in-memory bytes (e.g. a browser upload)."""
+    return _xlsx_to_dataset(io.BytesIO(raw), name)
 
 
 def load_dataset(path: str, *, name: str = "") -> Dataset:

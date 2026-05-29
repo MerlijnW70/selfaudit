@@ -8,13 +8,14 @@ data never leaves your machine (the server binds to localhost).
 
 from __future__ import annotations
 
+import base64
 import json
 import webbrowser
 from collections.abc import Callable
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from .datasets import Dataset, infer_checks, parse_text, svg_chart
+from .datasets import Dataset, infer_checks, parse_text, parse_xlsx_bytes, svg_chart
 from .datasetscanner import SelfAuditingDatasetScanner
 from .sources import SourceUnavailable, crypto_prices, fetch_csv, open_meteo, usgs_earthquakes
 
@@ -60,10 +61,10 @@ button:disabled{opacity:.5;cursor:default}
 .bar .grow{flex:1}
 .spinner{width:16px;height:16px;border:2px solid #d0d7de;border-top-color:#1f883d;border-radius:50%;display:inline-block;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class='wrap'>
-<h1>selfaudit</h1><p class='sub'>Drop a CSV, paste a URL, or pick a live source — get a trust verdict.</p>
+<h1>selfaudit</h1><p class='sub'>Know whether you can trust your data. Drop a file, paste a URL, or pick a live source — get a clear verdict with the reasons.</p>
 <div class='card'>
-  <div class='drop' id='drop'>Drop a CSV here, or click to choose a file
-    <input type='file' id='file' accept='.csv,text/csv' style='display:none'></div>
+  <div class='drop' id='drop'><b>Drop a file here</b> — CSV, JSON, or Excel — or click to choose
+    <input type='file' id='file' accept='.csv,.tsv,.txt,.json,.xlsx,.xlsm' style='display:none'></div>
   <div class='row'>
     <input type='text' id='url' placeholder='https://host/data.csv'>
     <select id='source'>
@@ -123,9 +124,17 @@ async function render(label,promise){
   catch(e){show('<p style="font:15px system-ui;padding:20px;color:#cf222e">request failed: '+e+'</p>');}
   finally{busy(false);}
 }
+function readBase64(f){return new Promise((res,rej)=>{const r=new FileReader();
+r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
+async function scanFile(f){
+  const n=f.name.toLowerCase();
+  if(n.endsWith('.xlsx')||n.endsWith('.xlsm'))
+    return render('scanning '+f.name+'…',post({mode:'xlsx',value:await readBase64(f),name:f.name}));
+  return render('scanning '+f.name+'…',post({mode:'csv',value:await f.text(),name:f.name}));
+}
 async function scan(){
   const f=file.files[0],url=urlIn.value.trim(),src=srcIn.value;
-  if(f) render('scanning '+f.name+'…',post({mode:'csv',value:await f.text(),name:f.name}));
+  if(f) scanFile(f);
   else if(url) render('fetching '+url+'…',post({mode:'url',value:url}));
   else if(src) render('fetching '+src+'…',post({mode:'source',value:src}));
   else show('<p style="font:15px system-ui;padding:20px">Choose a file, URL, or source — or try an example.</p>');
@@ -166,6 +175,8 @@ def scan_payload(data: dict) -> str:
     try:
         if mode == "csv":
             ds = parse_text(value, data.get("name", "uploaded.csv"))
+        elif mode == "xlsx":
+            ds = parse_xlsx_bytes(base64.b64decode(value), name=data.get("name", "uploaded.xlsx"))
         elif mode == "url":
             ds = fetch_csv(value)
         elif mode == "source" and value in _SOURCES:
