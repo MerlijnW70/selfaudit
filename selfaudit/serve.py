@@ -14,7 +14,7 @@ from collections.abc import Callable
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from .datasets import Dataset, infer_checks, parse_csv, svg_chart
+from .datasets import Dataset, infer_checks, parse_text, svg_chart
 from .datasetscanner import SelfAuditingDatasetScanner
 from .sources import SourceUnavailable, crypto_prices, fetch_csv, open_meteo, usgs_earthquakes
 
@@ -96,7 +96,7 @@ def scan_payload(data: dict) -> str:
     value = data.get("value", "")
     try:
         if mode == "csv":
-            ds = parse_csv(value, data.get("name", "uploaded.csv"))
+            ds = parse_text(value, data.get("name", "uploaded.csv"))
         elif mode == "url":
             ds = fetch_csv(value)
         elif mode == "source" and value in _SOURCES:

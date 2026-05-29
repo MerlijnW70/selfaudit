@@ -21,7 +21,7 @@ import urllib.request
 from datetime import datetime
 from typing import Any
 
-from .datasets import Dataset, parse_csv
+from .datasets import Dataset, parse_text
 from .llm import enable_os_truststore
 
 
@@ -62,7 +62,7 @@ def fetch_csv(url: str, *, timeout: float = 20.0) -> Dataset:
             text = resp.read().decode("utf-8")
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
         raise SourceUnavailable(f"could not fetch {url}: {exc}") from exc
-    return parse_csv(text, url)
+    return parse_text(text, url)
 
 
 def open_meteo(

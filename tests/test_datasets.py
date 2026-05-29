@@ -14,7 +14,11 @@ from selfaudit.datasets import (
     infer_checks,
     iqr_outliers,
     load_csv,
+    load_dataset,
     no_missing_required,
+    parse_csv,
+    parse_json,
+    parse_text,
     svg_chart,
     timestamps_monotonic,
     values_in_range,
@@ -57,6 +61,85 @@ def test_load_csv_roundtrip(tmp_path) -> None:
     ds = load_csv(str(p))
     assert ds.n == 2
     assert ds.rows[0]["temperature"] == "20.5"
+
+
+# --------------------------------------------------------------------------- #
+# Real-world input: delimiters, encoding, no header, JSON, Excel
+# --------------------------------------------------------------------------- #
+
+
+def test_parse_csv_semicolon_delimiter() -> None:
+    # European-style ;-delimited CSV (the #1 "my file isn't a clean comma CSV").
+    ds = parse_csv("naam;leeftijd\nAda;36\nGrace;45\n")
+    assert ds.columns == ["naam", "leeftijd"]
+    assert ds.rows[0]["leeftijd"] == "36"
+
+
+def test_parse_csv_tab_delimiter() -> None:
+    ds = parse_csv("a\tb\n1\t2\n3\t4\n")
+    assert ds.columns == ["a", "b"]
+    assert ds.rows[1]["a"] == "3"
+
+
+def test_parse_csv_headerless_numeric() -> None:
+    ds = parse_csv("1,2,3\n4,5,6\n")
+    assert ds.columns == ["col1", "col2", "col3"]
+    assert ds.n == 2
+
+
+def test_load_csv_handles_bom_and_latin1(tmp_path) -> None:
+    bom = tmp_path / "bom.csv"
+    bom.write_bytes("﻿city,temp\nUtrecht,20\n".encode())
+    assert load_csv(str(bom)).columns == ["city", "temp"]  # BOM stripped
+    lat = tmp_path / "lat.csv"
+    lat.write_bytes("naam,plaats\nJosé,München\n".encode("latin-1"))
+    assert load_csv(str(lat)).rows[0]["naam"] == "José"  # decoded, not crashed
+
+
+def test_parse_json_list_of_objects() -> None:
+    ds = parse_json('[{"a": 1, "b": 2}, {"a": 3, "b": 4}]')
+    assert ds.columns == ["a", "b"]
+    assert ds.rows[1]["a"] == "3"
+
+
+def test_parse_json_column_arrays() -> None:
+    ds = parse_json('{"time": [1, 2, 3], "temp": [20, 21, 22]}')
+    assert ds.columns == ["time", "temp"]
+    assert ds.n == 3
+    assert ds.rows[2]["temp"] == "22"
+
+
+def test_parse_json_bad_shape_raises() -> None:
+    import pytest as _pytest
+
+    with _pytest.raises(ValueError):
+        parse_json('"just a string"')
+
+
+def test_parse_text_dispatches_by_content_and_name() -> None:
+    assert parse_text('[{"x": 1}]').columns == ["x"]  # content sniff -> JSON
+    assert parse_text("x,y\n1,2\n").columns == ["x", "y"]  # -> CSV
+
+
+def test_load_dataset_reads_json_and_xlsx(tmp_path) -> None:
+    import pytest as _pytest
+
+    j = tmp_path / "d.json"
+    j.write_text('[{"a": 1, "b": 2}, {"a": 3, "b": 4}]', encoding="utf-8")
+    assert load_dataset(str(j)).columns == ["a", "b"]
+
+    openpyxl = _pytest.importorskip("openpyxl")
+    x = tmp_path / "d.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["city", "temp"])
+    ws.append(["Amsterdam", 20])
+    ws.append(["Rotterdam", 21])
+    wb.save(str(x))
+    ds = load_dataset(str(x))
+    assert ds.columns == ["city", "temp"]
+    assert ds.n == 2
+    assert ds.rows[1]["city"] == "Rotterdam"
 
 
 # --------------------------------------------------------------------------- #

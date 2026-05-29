@@ -11,7 +11,8 @@ selfaudit = "selfaudit.scan:main"
 selfaudit-serve = "selfaudit.serve:main"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "truststore"]
+excel = ["openpyxl>=3.1"]  # .xlsx input support
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "truststore", "openpyxl>=3.1"]
 # 'truststore' routes TLS verification through the OS trust store — needed for the
 # live LLM run behind a TLS-intercepting corporate proxy (see selfaudit/llm.py).
 

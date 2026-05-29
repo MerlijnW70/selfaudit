@@ -188,7 +188,7 @@ def test_run_writes_html_report(tmp_path) -> None:
 
 def test_run_bad_csv_path_is_error(capsys) -> None:
     assert run(["/no/such/file-12345.csv", "--infer"]) == 2
-    assert "cannot read CSV" in capsys.readouterr().err
+    assert "cannot read dataset" in capsys.readouterr().err
 
 
 def test_run_scans_a_csv_url(monkeypatch, capsys) -> None:

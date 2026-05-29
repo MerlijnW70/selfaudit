@@ -65,7 +65,9 @@ Regenerate it any time with `selfaudit examples/sample.csv --html examples/sampl
   whether an anomaly is a localized burst or systemic.
 - **Low-noise** — severity levels: hard problems fail, “probably fine” findings
   are warnings. The verdict means *needs review*, not *broken*.
-- **Anywhere your data is** — a local file, a URL, or a free live feed
+- **Any format, anywhere** — CSV/TSV (delimiter, encoding & header auto-detected,
+  incl. `;`-separated European files), JSON, or Excel (`.xlsx`, install
+  `selfaudit[excel]`); from a local file, a URL, or a free live feed
   (`--source open-meteo|usgs|crypto`), no API key.
 - **Shareable** — `--html report.html` writes a colour-coded report.
 - **CI-ready** — exits `0` (trusted/review) / `1` (untrusted); `--strict` fails

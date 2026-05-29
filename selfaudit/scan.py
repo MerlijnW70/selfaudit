@@ -27,7 +27,7 @@ from .datasets import (
     distribution_stationary,
     duplicate_rate_below,
     infer_checks,
-    load_csv,
+    load_dataset,
     no_missing_required,
     svg_chart,
     timestamps_monotonic,
@@ -89,7 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "csv",
         nargs="?",
-        help="path OR URL of the CSV to scan (omit when using --source)",
+        metavar="DATASET",
+        help="path or URL of the dataset to scan: CSV/TSV, JSON, or .xlsx "
+        "(omit when using --source)",
     )
     p.add_argument(
         "--source",
@@ -197,12 +199,12 @@ def run(argv: list[str] | None = None) -> int:
         elif args.csv.startswith(("http://", "https://")):
             ds = fetch_csv(args.csv)
         else:
-            ds = load_csv(args.csv)
+            ds = load_dataset(args.csv)
     except SourceUnavailable as exc:
         print(f"error: source unavailable — {exc}", file=sys.stderr)
         return 3
-    except OSError as exc:
-        print(f"error: cannot read CSV — {exc}", file=sys.stderr)
+    except (OSError, ValueError) as exc:
+        print(f"error: cannot read dataset — {exc}", file=sys.stderr)
         return 2
 
     # Build checks: explicit rule flags if given, otherwise infer from the data.

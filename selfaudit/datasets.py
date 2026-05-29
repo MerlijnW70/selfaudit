@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -53,18 +54,142 @@ class Dataset:
         return out
 
 
+def _stringify(value: object) -> str:
+    return "" if value is None else str(value)
+
+
+def _decode(raw: bytes) -> str:
+    """Decode bytes to text, tolerating a BOM and non-UTF-8 files (latin-1 last)."""
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _all_numeric(cells: list[str]) -> bool:
+    """True if every non-empty cell parses as a number (used to spot a header-less
+    first row of data)."""
+    seen = False
+    for c in cells:
+        c = c.strip()
+        if c == "":
+            continue
+        try:
+            float(c)
+            seen = True
+        except ValueError:
+            return False
+    return seen
+
+
 def parse_csv(text: str, name: str = "") -> Dataset:
-    """Parse CSV *text* into a :class:`Dataset` (pure stdlib, header row required)."""
-    reader = csv.DictReader(io.StringIO(text))
-    columns = list(reader.fieldnames or [])
-    rows = [{k: (v if v is not None else "") for k, v in r.items()} for r in reader]
+    """Parse CSV/TSV *text* into a :class:`Dataset`.
+
+    Auto-detects the delimiter (``,`` ``;`` tab ``|``) and whether a header row is
+    present (a fully numeric first row is treated as data, with synthesized column
+    names). Pure stdlib.
+    """
+    sample = text[:8192]
+    try:
+        delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+    except csv.Error:
+        delimiter = ","
+    raw_rows = [r for r in csv.reader(io.StringIO(text), delimiter=delimiter) if r]
+    if not raw_rows:
+        return Dataset([], [], name)
+    if _all_numeric(raw_rows[0]):
+        columns = [f"col{i + 1}" for i in range(len(raw_rows[0]))]
+        data = raw_rows
+    else:
+        columns = [c.strip() for c in raw_rows[0]]
+        data = raw_rows[1:]
+    rows = [{columns[i]: (r[i] if i < len(r) else "") for i in range(len(columns))} for r in data]
     return Dataset(columns, rows, name)
 
 
+def parse_json(text: str, name: str = "") -> Dataset:
+    """Parse JSON *text* into a :class:`Dataset`.
+
+    Accepts a list of objects (``[{"a":1}, ...]``) or column arrays
+    (``{"a":[1,2], "b":[3,4]}`` — e.g. an Open-Meteo ``hourly`` block).
+    """
+    data = json.loads(text)
+    if isinstance(data, list):
+        objs = [o for o in data if isinstance(o, dict)]
+        columns: list[str] = []
+        for o in objs:
+            for k in o:
+                if k not in columns:
+                    columns.append(k)
+        rows = [{c: _stringify(o.get(c)) for c in columns} for o in objs]
+        return Dataset(columns, rows, name)
+    if isinstance(data, dict):
+        arrays = {k: v for k, v in data.items() if isinstance(v, list)}
+        if arrays:
+            n = max(len(v) for v in arrays.values())
+            cols = list(arrays)
+            rows = [
+                {c: (_stringify(arrays[c][i]) if i < len(arrays[c]) else "") for c in cols}
+                for i in range(n)
+            ]
+            return Dataset(cols, rows, name)
+    raise ValueError("unsupported JSON shape — need a list of objects or column arrays")
+
+
+def parse_text(text: str, name: str = "") -> Dataset:
+    """Parse text as JSON when the name ends in ``.json`` or the content looks like
+    JSON, otherwise as CSV/TSV."""
+    looks_json = name.lower().endswith(".json") or text.lstrip()[:1] in ("[", "{")
+    if looks_json:
+        try:
+            return parse_json(text, name)
+        except (ValueError, json.JSONDecodeError):
+            if name.lower().endswith(".json"):
+                raise
+    return parse_csv(text, name)
+
+
+def load_xlsx(path: str, *, name: str = "", sheet: str | None = None) -> Dataset:
+    """Load the first row as headers and the rest as data from an ``.xlsx`` file.
+
+    Requires the optional ``openpyxl`` package (``pip install selfaudit[excel]``).
+    """
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:  # pragma: no cover - exercised only without openpyxl
+        raise ValueError(
+            "Excel support needs the optional 'openpyxl' package (pip install 'selfaudit[excel]')"
+        ) from exc
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    worksheet = workbook[sheet] if sheet else workbook.active
+    raw_rows = [list(r) for r in worksheet.iter_rows(values_only=True)]
+    workbook.close()
+    raw_rows = [r for r in raw_rows if any(c is not None and str(c).strip() != "" for c in r)]
+    if not raw_rows:
+        return Dataset([], [], name or path)
+    columns = [_stringify(c).strip() or f"col{i + 1}" for i, c in enumerate(raw_rows[0])]
+    rows = [
+        {columns[i]: _stringify(r[i]) if i < len(r) else "" for i in range(len(columns))}
+        for r in raw_rows[1:]
+    ]
+    return Dataset(columns, rows, name or path)
+
+
+def load_dataset(path: str, *, name: str = "") -> Dataset:
+    """Load a dataset file by extension: ``.xlsx`` via openpyxl, ``.json`` as JSON,
+    everything else as CSV/TSV (delimiter + encoding auto-detected)."""
+    if path.lower().endswith((".xlsx", ".xlsm")):
+        return load_xlsx(path, name=name or path)
+    with open(path, "rb") as fh:
+        return parse_text(_decode(fh.read()), name or path)
+
+
 def load_csv(path: str, *, name: str = "") -> Dataset:
-    """Load a CSV file into a :class:`Dataset`."""
-    with open(path, encoding="utf-8") as fh:
-        return parse_csv(fh.read(), name or path)
+    """Load a CSV/TSV file into a :class:`Dataset` (delimiter + encoding detected)."""
+    with open(path, "rb") as fh:
+        return parse_csv(_decode(fh.read()), name or path)
 
 
 @dataclass
