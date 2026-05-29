@@ -57,8 +57,10 @@ Application 4 — dataset trust scanning:
 - Python ≥ 3.10
 - [`scipy`](https://scipy.org/) ≥ 1.10 — the root-finder engine (App 1). App 2 is
   pure standard library.
-- Dev/quality gates: `pytest`, `pytest-cov`, `ruff`, `mypy` (run via the ANVIL gate,
-  see below). Install with `pip install -e ".[dev]"`.
+- Dev/quality gates: `pytest`, `pytest-cov`, `ruff`, `mypy`. Install with
+  `pip install -e ".[dev]"`. The fast loop (`anvil`: lint/format/type/test) runs in
+  ~15s; coverage is split out into `pytest --cov=selfaudit` (enforces the 95% floor)
+  to keep that loop snappy — run it before pushing or in CI.
 
 ## Usage
 
@@ -71,8 +73,8 @@ python -m selfaudit.llmdemo      # LLM validation: 4 scripted scenarios (+ live 
 python -m selfaudit.datasetdemo  # dataset scan: planted faulty-sensor window, writes dataset_audit_log.json
 python -m selfaudit.scan FILE.csv --range temperature:-50:150 --monotonic timestamp  # scan a real CSV
 python -m selfaudit.livedemo     # fetch & scan FREE live data (Open-Meteo + USGS); no API key
-pytest -q                        # test suite
-pytest --cov=selfaudit -q        # coverage (gate floor: 95%)
+pytest -q                        # fast test suite (~15s; part of the anvil gate)
+pytest --cov=selfaudit           # full check: coverage, enforces the 95% floor (pre-push / CI)
 ruff check . && ruff format --check . && mypy .   # anvil gates
 ```
 
