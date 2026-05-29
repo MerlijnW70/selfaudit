@@ -87,7 +87,21 @@ def test_exact_field_validator() -> None:
     assert not v('{"other": 42}').ok  # missing key
     wrong = v('{"product": 41}')
     assert not wrong.ok
-    assert "expected 42" in wrong.detail
+    assert "expected 42" in wrong.detail  # full detail records the truth (audit log)
+    # ...but the self-repair hint must NOT leak the expected value:
+    assert "42" not in wrong.hint
+    assert "incorrect" in wrong.hint
+
+
+def test_value_validator_hint_does_not_leak_into_repair_prompt() -> None:
+    # End-to-end: a tier that keeps answering wrong is never handed the answer,
+    # so it cannot "self-repair" by echoing it -> the failure escalates honestly.
+    from selfaudit.llm import exact_field_validator
+    from selfaudit.llmauditor import _repair_prompt
+
+    res = exact_field_validator("product", 33679062)('{"product": 33682062}')
+    prompt = _repair_prompt(Task("calc", "compute it", lambda _t: res), res.hint)
+    assert "33679062" not in prompt  # the correct answer never appears in the hint
 
 
 # --------------------------------------------------------------------------- #
@@ -108,19 +122,20 @@ def test_direct_accept_when_first_tier_validates() -> None:
     assert any(rt.name == "corroborate_output" for rt in accepted.retests)
 
 
-def test_accept_after_retry_on_flaky_failure() -> None:
-    # First reply fails, retry validates -> accepted after re-test, no escalation.
+def test_accept_after_self_repair() -> None:
+    # First reply fails; re-prompted with the error, the tier returns valid output.
     v = SelfAuditingValidator([ScriptedCaller("haiku", [_PROSE, _GOOD])])
     res = v.run(_task())
     assert res.tier == "haiku"
     assert res.log.final_status == "validated"
     accepted = res.log.attempts[-1]
-    assert accepted.outcome == "validated-after-retry"
+    assert accepted.outcome == "validated-after-repair"
     assert accepted.classification == "unexpected"
     assert accepted.decision == "accept"
-    repro = next(rt for rt in accepted.retests if rt.name == "reproduce_under_retry")
-    assert repro.reproduced_anomaly is False
-    assert "fluke" in res.log.conclusion
+    repair = next(rt for rt in accepted.retests if rt.name == "self_repair")
+    assert repair.reproduced_anomaly is False
+    assert "self-repair succeeded" in repair.conclusion
+    assert "self-repair" in res.log.conclusion
 
 
 def test_escalation_when_tier_is_deterministically_too_weak() -> None:
@@ -138,8 +153,8 @@ def test_escalation_when_tier_is_deterministically_too_weak() -> None:
     assert first.strategy == "haiku"
     assert first.classification == "unexpected"
     assert first.decision == "escalate"
-    repro = next(rt for rt in first.retests if rt.name == "reproduce_under_retry")
-    assert repro.reproduced_anomaly is True
+    repair = next(rt for rt in first.retests if rt.name == "self_repair")
+    assert repair.reproduced_anomaly is True
 
 
 def test_all_tiers_exhausted_raises_with_log() -> None:

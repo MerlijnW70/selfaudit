@@ -24,8 +24,8 @@
       "classification": "unexpected",
       "retests": [
         {
-          "name": "reproduce_under_retry",
-          "description": "retry the same tier once and re-validate",
+          "name": "self_repair",
+          "description": "re-prompt the same tier with the validation error and re-validate",
           "reproduced_anomaly": true,
           "checks": [
             {
@@ -36,7 +36,7 @@
               "detail": "key 'age' should be int, got str; missing key 'email'"
             }
           ],
-          "conclusion": "retry also failed validation: deterministic deficiency of this tier \u2014 escalate"
+          "conclusion": "self-repair still failed: deterministic deficiency of this tier \u2014 escalate"
         }
       ],
       "decision": "escalate",

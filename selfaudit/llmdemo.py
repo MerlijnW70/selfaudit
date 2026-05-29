@@ -2,7 +2,7 @@
 
 Shows the Self-Auditing AI validating LLM output. The scripted scenarios are
 deterministic (no API key needed) and exercise every branch of the controller:
-direct accept, accept-after-retry, escalate-then-validate, and all-tiers-
+direct accept, accept-after-self-repair, escalate-then-validate, and all-tiers-
 exhausted. They print the audit reports and write ``llm_audit_log.json``.
 
 If the Anthropic SDK and an API key are available, a final live run sends a real
@@ -66,7 +66,7 @@ def scripted_scenarios() -> list[tuple[str, SelfAuditingValidator]]:
             SelfAuditingValidator([ScriptedCaller("haiku", [_GOOD])]),
         ),
         (
-            "accept-after-retry (haiku flaky, retry validates)",
+            "accept-after-self-repair (haiku fixes its output when told the error)",
             SelfAuditingValidator([ScriptedCaller("haiku", [_BAD_PROSE, _GOOD])]),
         ),
         (

@@ -68,7 +68,15 @@ class ValidationResult:
 
     ok: bool
     violations: int  # 0 == satisfied; the auditor uses this as the measured value
-    detail: str
+    detail: str  # full description for the audit log (may reveal the expected value)
+    hint: str = ""  # safe corrective feedback for self-repair; must NOT leak the answer
+
+    def __post_init__(self) -> None:
+        # By default the hint mirrors the detail — safe for structural validators
+        # (missing key, wrong type, bad JSON). Value validators must set a hint
+        # explicitly so the ground truth is never fed back to the model.
+        if not self.hint:
+            self.hint = self.detail
 
 
 Validator = Callable[[str], ValidationResult]
@@ -275,7 +283,14 @@ def exact_field_validator(key: str, expected: object) -> Validator:
         if key not in data:
             return ValidationResult(False, 1, f"missing key '{key}'")
         if data[key] != expected:
-            return ValidationResult(False, 1, f"key '{key}' = {data[key]!r}, expected {expected!r}")
+            # The detail records the expected value for the audit log, but the
+            # hint must NOT — otherwise self-repair would just echo the answer.
+            return ValidationResult(
+                False,
+                1,
+                f"key '{key}' = {data[key]!r}, expected {expected!r}",
+                hint=f"the value for key '{key}' is incorrect; recompute it",
+            )
         return ValidationResult(True, 0, f"key '{key}' equals the expected value")
 
     return validate
