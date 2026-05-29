@@ -1,0 +1,77 @@
+{
+  "problem": "open-meteo@52.37,4.9",
+  "tolerance": 0.0,
+  "description": "every rule check must pass for the dataset to be trusted",
+  "attempts": [
+    {
+      "index": 1,
+      "strategy": "range[temperature]",
+      "inputs": {},
+      "outcome": "clean",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "range[temperature]",
+          "measured": 0.0,
+          "threshold": 0.0,
+          "satisfied": true,
+          "detail": "0/48 rows have temperature outside [-50, 60]"
+        }
+      ],
+      "classification": "expected",
+      "retests": [],
+      "decision": "accept",
+      "notes": "rule satisfied",
+      "params": null
+    },
+    {
+      "index": 2,
+      "strategy": "monotonic[epoch]",
+      "inputs": {},
+      "outcome": "clean",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "monotonic[epoch]",
+          "measured": 0.0,
+          "threshold": 0.0,
+          "satisfied": true,
+          "detail": "0/48 rows where epoch decreases"
+        }
+      ],
+      "classification": "expected",
+      "retests": [],
+      "decision": "accept",
+      "notes": "rule satisfied",
+      "params": null
+    },
+    {
+      "index": 3,
+      "strategy": "missing_required",
+      "inputs": {},
+      "outcome": "clean",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "missing_required",
+          "measured": 0.0,
+          "threshold": 0.01,
+          "satisfied": true,
+          "detail": "0/48 rows (0.0%) missing one of ['time', 'temperature']"
+        }
+      ],
+      "classification": "expected",
+      "retests": [],
+      "decision": "accept",
+      "notes": "rule satisfied",
+      "params": null
+    }
+  ],
+  "final_status": "trusted",
+  "final_root": null,
+  "winning_strategy": null,
+  "conclusion": "all checks passed \u2014 dataset satisfies every stated rule"
+}

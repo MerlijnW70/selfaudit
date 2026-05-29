@@ -70,6 +70,7 @@ python -m selfaudit.noisedemo    # stochastic noise: Monte-Carlo over the re-tes
 python -m selfaudit.llmdemo      # LLM validation: 4 scripted scenarios (+ live run if a key is set)
 python -m selfaudit.datasetdemo  # dataset scan: planted faulty-sensor window, writes dataset_audit_log.json
 python -m selfaudit.scan FILE.csv --range temperature:-50:150 --monotonic timestamp  # scan a real CSV
+python -m selfaudit.livedemo     # fetch & scan FREE live data (Open-Meteo + USGS); no API key
 pytest -q                        # test suite
 pytest --cov=selfaudit -q        # coverage (gate floor: 95%)
 ruff check . && ruff format --check . && mypy .   # anvil gates
@@ -195,6 +196,22 @@ python -m selfaudit.scan readings.csv \
     --stationary temperature:3 \
     --json audit.json
 ```
+
+## Live data sources (free, no API key)
+
+The scanner can pull **real-time public data** instead of a local file — pure
+stdlib `urllib`, TLS routed through the OS trust store so it works behind a
+corporate proxy, and a clean `SourceUnavailable` (never a crash) when offline:
+
+- `open_meteo(lat, lon)` — hourly 2 m temperature forecast (Open-Meteo).
+- `usgs_earthquakes(period)` — recent earthquakes (USGS GeoJSON feed).
+
+`python -m selfaudit.livedemo` fetches both and scans them live. A representative
+run: the **Open-Meteo** temperatures pass every rule (`TRUSTED`), while the
+**USGS** feed is flagged `UNTRUSTED` because its timestamps decrease — segment
+analysis classifies it as "systemic, dataset-wide". That is not a data error: the
+USGS feed is documented as newest-first, so the scanner surfaced and explained a
+real ordering property automatically.
 
 ## License
 

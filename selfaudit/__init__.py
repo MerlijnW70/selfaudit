@@ -42,6 +42,7 @@ from .solver import (
     newton,
     secant,
 )
+from .sources import SourceUnavailable, open_meteo, usgs_earthquakes
 
 __all__ = [
     "Attempt",
@@ -67,6 +68,9 @@ __all__ = [
     "no_missing_required",
     "duplicate_rate_below",
     "distribution_stationary",
+    "open_meteo",
+    "usgs_earthquakes",
+    "SourceUnavailable",
     "SelfAuditingValidator",
     "Validation",
     "ValidationFailed",
