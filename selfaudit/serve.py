@@ -58,19 +58,28 @@ iframe{width:100%;height:620px;border:1px solid #d0d7de;border-radius:12px;backg
 <iframe id='out' title='report'></iframe>
 <script>
 const out=document.getElementById('out'),drop=document.getElementById('drop'),
-file=document.getElementById('file');
+file=document.getElementById('file'),urlIn=document.getElementById('url'),
+srcIn=document.getElementById('source');
 function show(h){out.srcdoc=h;}
+// Keep exactly one input active: touching one clears the others, so switching
+// from a file to a live source actually scans the source (not the stale file).
+function keepOnly(which){
+  if(which!=='file') file.value='';
+  if(which!=='url') urlIn.value='';
+  if(which!=='source') srcIn.value='';
+}
 drop.onclick=()=>file.click();
 drop.ondragover=e=>{e.preventDefault();drop.classList.add('over');};
 drop.ondragleave=()=>drop.classList.remove('over');
 drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files[0])
-{file.files=e.dataTransfer.files;scan();}};
-file.onchange=()=>scan();
+{file.files=e.dataTransfer.files;keepOnly('file');scan();}};
+file.onchange=()=>{keepOnly('file');scan();};
+srcIn.onchange=()=>{keepOnly('source');scan();};
+urlIn.oninput=()=>keepOnly('url');
 async function post(d){const r=await fetch('/scan',{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});return await r.text();}
 async function scan(){
-  const f=file.files[0],url=document.getElementById('url').value.trim(),
-  src=document.getElementById('source').value;
+  const f=file.files[0],url=urlIn.value.trim(),src=srcIn.value;
   show('<p style="font:15px system-ui;padding:20px">scanning…</p>');
   try{
     if(f){show(await post({mode:'csv',value:await f.text(),name:f.name}));}
