@@ -24,4 +24,4 @@ env/
 
 # Scratch: fetched third-party data & generated HTML reports
 titanic.csv
-*_report.html
+*report.html
