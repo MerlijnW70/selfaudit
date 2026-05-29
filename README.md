@@ -69,6 +69,7 @@ python -m selfaudit.sensordemo   # sensor anomaly: 5 scenarios, writes sensor_au
 python -m selfaudit.noisedemo    # stochastic noise: Monte-Carlo over the re-test
 python -m selfaudit.llmdemo      # LLM validation: 4 scripted scenarios (+ live run if a key is set)
 python -m selfaudit.datasetdemo  # dataset scan: planted faulty-sensor window, writes dataset_audit_log.json
+python -m selfaudit.scan FILE.csv --range temperature:-50:150 --monotonic timestamp  # scan a real CSV
 pytest -q                        # test suite
 pytest --cov=selfaudit -q        # coverage (gate floor: 95%)
 ruff check . && ruff format --check . && mypy .   # anvil gates
@@ -181,6 +182,19 @@ it is — then writes it all to an audit log. The demo plants a stuck-high senso
 fault in rows 420–479 and the segment-analysis re-test pins it back to exactly
 that window. Checks are pluggable (the `Check` interface), so business or
 scientific rules drop straight in.
+
+A command-line front end scans a real CSV and exits `0` (trusted) or `1`
+(untrusted), so it drops straight into a CI pipeline:
+
+```bash
+python -m selfaudit.scan readings.csv \
+    --range temperature:-50:150 \
+    --monotonic timestamp \
+    --missing temperature,sensor_id:0.01 \
+    --duplicates 0 \
+    --stationary temperature:3 \
+    --json audit.json
+```
 
 ## License
 
