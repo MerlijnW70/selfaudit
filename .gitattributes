@@ -1,0 +1,14 @@
+# Normalize line endings: store as LF in the repo, keep LF in the working tree
+# on all platforms. Stops the "LF will be replaced by CRLF" warnings on Windows.
+* text=auto eol=lf
+
+# Explicit for the file types in this project
+*.py    text eol=lf
+*.toml  text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+.gitignore   text eol=lf
+.gitattributes text eol=lf
