@@ -303,7 +303,8 @@ def test_html_report_renders_verdict_and_checks(tmp_path) -> None:
     assert "<!doctype html>" in html
     assert "UNTRUSTED" in html
     assert "range[temperature]" in html
-    assert "<script" not in html.lower()  # no injected scripts
+    assert "sortBy" in html  # interactive: sortable findings table
+    assert "chip fail" in html  # severity chip rendered for the failure
     out = tmp_path / "report.html"
     report.log.save_html(str(out))
     assert out.read_text(encoding="utf-8").startswith("<!doctype html>")

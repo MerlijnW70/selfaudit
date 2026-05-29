@@ -125,59 +125,108 @@ class AuditLog:
         }.get(self.final_status, "bad")
         return labels.get(self.final_status, self.final_status.upper()), tone
 
+    @staticmethod
+    def _attempt_status(attempt: Attempt) -> tuple[str, str]:
+        """Map an attempt's decision to a (label, css-class) status chip."""
+        return {
+            "accept": ("PASS", "pass"),
+            "warn": ("WARN", "warn"),
+            "flag": ("FAIL", "fail"),
+            "escalate": ("ESCALATED", "warn"),
+            "skip": ("SKIPPED", "muted"),
+        }.get(attempt.decision, (attempt.decision.upper(), "muted"))
+
     def to_html(self) -> str:
-        """A self-contained, shareable HTML report (inline CSS, no dependencies)."""
+        """A self-contained, shareable HTML report: summary banner, severity chips,
+        a sortable findings table, and collapsible re-test details. One portable
+        file — inline CSS, a touch of vanilla JS, no build step, no dependencies."""
         from html import escape
 
         verdict, tone = self._verdict()
         accent = {"good": "#1a7f37", "warn": "#9a6700", "bad": "#cf222e"}[tone]
+
+        counts: dict[str, int] = {}
+        for a in self.attempts:
+            label = self._attempt_status(a)[0]
+            counts[label] = counts.get(label, 0) + 1
+        chip_class = {"PASS": "pass", "WARN": "warn", "FAIL": "fail"}
+        summary = "".join(
+            f"<span class='chip {chip_class.get(lbl, 'muted')}'>{counts[lbl]} {escape(lbl.lower())}"
+            f"</span>"
+            for lbl in ("FAIL", "WARN", "PASS", "ESCALATED", "SKIPPED")
+            if counts.get(lbl)
+        )
+
+        css = (
+            "body{font:14px/1.6 system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#f6f8fa;"
+            "color:#1f2328}.wrap{max-width:960px;margin:0 auto;padding:28px 20px}"
+            "h1{font-size:20px;margin:0 0 2px}.sub{color:#656d76;margin:0 0 18px}"
+            f".verdict{{display:inline-block;padding:8px 18px;border-radius:8px;color:#fff;"
+            f"font-weight:800;font-size:16px;letter-spacing:.3px;background:{accent}}}"
+            ".counts{margin:14px 0 6px}.concl{color:#424a53;margin:6px 0 18px}"
+            ".chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;"
+            "border-radius:999px;margin-right:6px}"
+            ".chip.pass{background:#dafbe1;color:#1a7f37}.chip.warn{background:#fff1cc;color:#9a6700}"
+            ".chip.fail{background:#ffebe9;color:#cf222e}.chip.muted{background:#eaeef2;color:#656d76}"
+            "table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d0d7de;"
+            "border-radius:10px;overflow:hidden}thead th{text-align:left;background:#f0f3f6;"
+            "padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.4px;"
+            "color:#57606a;cursor:pointer;user-select:none}tbody td{padding:11px 12px;"
+            "border-top:1px solid #eaeef2;vertical-align:top}tbody tr:hover{background:#fafbfc}"
+            "td.idx{color:#8c959f;width:34px}td.name{font-weight:600;white-space:nowrap}"
+            "details{margin-top:6px}summary{cursor:pointer;color:#57606a;font-size:13px}"
+            ".notes{color:#656d76;font-size:13px;margin-top:4px}"
+            "code{background:#eff1f3;padding:1px 5px;border-radius:4px}"
+            "footer{color:#8c959f;font-size:12px;margin-top:18px}"
+        )
+
         parts: list[str] = []
         parts.append("<!doctype html><html lang='en'><head><meta charset='utf-8'>")
-        parts.append(f"<title>Self-Audit · {escape(self.problem)}</title>")
-        parts.append(
-            "<style>"
-            "body{font:14px/1.5 system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#f6f8fa;"
-            "color:#1f2328}.wrap{max-width:920px;margin:0 auto;padding:24px}"
-            "h1{font-size:18px;margin:0 0 4px}.sub{color:#656d76;margin:0 0 16px}"
-            f".verdict{{display:inline-block;padding:6px 14px;border-radius:6px;color:#fff;"
-            f"font-weight:700;background:{accent};margin-bottom:20px}}"
-            ".chk{background:#fff;border:1px solid #d0d7de;border-radius:8px;margin:10px 0;"
-            "padding:12px 16px}.chk h2{font-size:15px;margin:0 0 6px}"
-            ".ok{color:#1a7f37}.bad{color:#cf222e}.pill{font-size:12px;font-weight:700;"
-            "padding:2px 8px;border-radius:10px;margin-left:8px}"
-            ".pill.ok{background:#dafbe1}.pill.bad{background:#ffebe9}"
-            ".meta{color:#656d76;font-size:13px}.rt{margin:8px 0 0 0;padding:8px 12px;"
-            "background:#f6f8fa;border-left:3px solid #d0d7de;border-radius:4px}"
-            "code{background:#eff1f3;padding:1px 5px;border-radius:4px}"
-            ".concl{margin-top:8px}</style></head><body><div class='wrap'>"
-        )
-        parts.append(f"<h1>Self-Audit · {escape(self.problem)}</h1>")
+        parts.append("<meta name='viewport' content='width=device-width,initial-scale=1'>")
+        parts.append(f"<title>selfaudit · {escape(self.problem)}</title>")
+        parts.append(f"<style>{css}</style></head><body><div class='wrap'>")
+        parts.append(f"<h1>selfaudit · {escape(self.problem)}</h1>")
         parts.append(f"<p class='sub'>{escape(self.description)}</p>")
         parts.append(f"<div class='verdict'>{escape(verdict)}</div>")
+        parts.append(f"<div class='counts'>{summary}</div>")
         if self.conclusion:
-            parts.append(f"<p class='meta'>{escape(self.conclusion)}</p>")
+            parts.append(f"<p class='concl'>{escape(self.conclusion)}</p>")
+
+        parts.append("<table id='findings'>")
+        parts.append(
+            "<thead><tr><th onclick='sortBy(0)'>#</th><th onclick='sortBy(1)'>Check</th>"
+            "<th onclick='sortBy(2)'>Status</th><th>Detail</th></tr></thead><tbody>"
+        )
         for a in self.attempts:
-            passed = a.classification == "expected" or a.decision == "accept"
-            cls = "ok" if passed else "bad"
-            pill = "PASS" if passed else a.decision.upper()
-            parts.append("<div class='chk'>")
-            parts.append(
-                f"<h2>{escape(a.strategy)} <span class='pill {cls}'>{escape(pill)}</span></h2>"
-            )
-            for c in a.checks:
-                mark = "ok" if c.satisfied else "bad"
-                parts.append(
-                    f"<div class='meta'><span class='{mark}'>"
-                    f"{'✓' if c.satisfied else '✗'}</span> "
-                    f"<code>{escape(c.name)}</code> — {escape(c.detail)}</div>"
-                )
+            label, klass = self._attempt_status(a)
+            detail_bits = [f"<code>{escape(c.name)}</code> — {escape(c.detail)}" for c in a.checks]
+            cell = "<br>".join(detail_bits) if detail_bits else ""
             for r in a.retests:
-                parts.append(f"<div class='rt'><b>re-test:</b> {escape(r.name)}")
-                parts.append(f"<div class='concl'>{escape(r.conclusion)}</div></div>")
+                cell += (
+                    f"<details><summary>re-test: {escape(r.name)}</summary>"
+                    f"<div class='notes'>{escape(r.conclusion)}</div></details>"
+                )
+            if a.notes:
+                cell += f"<div class='notes'>{escape(a.notes)}</div>"
             parts.append(
-                f"<div class='meta'>decision: <b>{escape(a.decision)}</b> — {escape(a.notes)}</div>"
+                f"<tr><td class='idx'>{a.index}</td>"
+                f"<td class='name'>{escape(a.strategy)}</td>"
+                f"<td><span class='chip {klass}'>{escape(label)}</span></td>"
+                f"<td>{cell}</td></tr>"
             )
-            parts.append("</div>")
+        parts.append("</tbody></table>")
+        parts.append("<footer>Generated by selfaudit · click a column header to sort.</footer>")
+        parts.append(
+            "<script>function sortBy(n){var t=document.getElementById('findings'),"
+            "b=t.tBodies[0],rows=Array.prototype.slice.call(b.rows),"
+            "asc=t.getAttribute('data-s')!==n+'a';"
+            "rows.sort(function(p,q){var x=p.cells[n].innerText.trim(),"
+            "y=q.cells[n].innerText.trim(),nx=parseFloat(x),ny=parseFloat(y);"
+            "if(!isNaN(nx)&&!isNaN(ny))return asc?nx-ny:ny-nx;"
+            "return asc?x.localeCompare(y):y.localeCompare(x);});"
+            "rows.forEach(function(r){b.appendChild(r);});"
+            "t.setAttribute('data-s',asc?n+'a':n+'d');}</script>"
+        )
         parts.append("</div></body></html>")
         return "".join(parts)
 
