@@ -110,6 +110,22 @@ def test_parse_csv_drops_all_blank_filler_rows() -> None:
     assert ds.rows[1] == {"ts": "2024", "amount": ""}  # partial row kept (missing amount)
 
 
+def test_report_bounds_wide_offending_preview() -> None:
+    # A many-column offending-rows preview must scroll inside its cell, not push the
+    # whole report off-screen: fixed table layout + colgroup bound the Detail column
+    # and the preview keeps its own horizontal scroller.
+    cols = ["id", "amount", "region", "category", "channel", "note"]
+    rows = [{c: f"{c}_{i}" for c in cols} for i in range(12)]
+    for r in rows:
+        r["amount"] = "50"
+    rows[5]["amount"] = "99999"  # an outlier so a preview is rendered
+    ds = Dataset(cols, rows, "wide")
+    html = SelfAuditingDatasetScanner(infer_checks(ds)).scan(ds).log.to_html()
+    assert "<colgroup>" in html  # column widths are pinned
+    assert "table-layout:fixed" in html  # Detail column can't expand to content width
+    assert "overflow-x:auto" in html  # the wide preview scrolls within the cell
+
+
 def test_humanize_check_gives_plain_titles() -> None:
     assert humanize_check("missing_required") == "Missing values"
     assert humanize_check("duplicate_rate") == "Duplicate rows"

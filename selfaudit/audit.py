@@ -182,8 +182,11 @@ class AuditLog:
             "border-radius:10px;overflow:hidden}thead th{text-align:left;background:#f0f3f6;"
             "padding:10px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.4px;"
             "color:#57606a;cursor:pointer;user-select:none}tbody td{padding:11px 12px;"
-            "border-top:1px solid #eaeef2;vertical-align:top}tbody tr:hover{background:#fafbfc}"
-            "td.idx{color:#8c959f;width:34px}td.name{font-weight:600;white-space:nowrap}"
+            "border-top:1px solid #eaeef2;vertical-align:top;overflow-wrap:anywhere}"
+            "tbody tr:hover{background:#fafbfc}"
+            # fixed layout + a colgroup bound the Detail column, so a wide offending-rows
+            # preview scrolls inside its cell instead of pushing the whole report off-screen.
+            "#findings{table-layout:fixed}td.idx{color:#8c959f}td.name{font-weight:600}"
             "details{margin-top:6px}summary{cursor:pointer;color:#57606a;font-size:13px}"
             ".notes{color:#656d76;font-size:13px;margin-top:4px}"
             "code{background:#eff1f3;padding:1px 5px;border-radius:4px}"
@@ -222,6 +225,10 @@ class AuditLog:
             parts.append(f"<div class='chart'>{chart}</div>")
 
         parts.append("<table id='findings'>")
+        parts.append(
+            "<colgroup><col style='width:38px'><col style='width:26%'>"
+            "<col style='width:96px'><col></colgroup>"
+        )
         parts.append(
             "<thead><tr><th onclick='sortBy(0)'>#</th><th onclick='sortBy(1)'>Check</th>"
             "<th onclick='sortBy(2)'>Status</th><th>Detail</th></tr></thead><tbody>"
