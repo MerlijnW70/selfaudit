@@ -144,6 +144,12 @@ key or transport error degrades cleanly to an escalation, never a crash), while
 testable offline. The live run in `llmdemo.py` activates only when
 `ANTHROPIC_API_KEY` is set.
 
+Behind a **TLS-intercepting proxy** (corporate networks that re-sign HTTPS),
+Python may reject the proxy's CA with `CERTIFICATE_VERIFY_FAILED`. Point
+verification at your corporate root CA via the `SSL_CERT_FILE` env var (or
+`AnthropicCaller(..., ca_bundle=...)`). TLS verification is never disabled — only
+the trust anchor changes.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

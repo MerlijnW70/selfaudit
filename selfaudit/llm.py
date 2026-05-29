@@ -20,7 +20,7 @@ import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 # Model IDs of the default escalation ladder (cheap/fast -> strong).
 HAIKU = "claude-haiku-4-5-20251001"
@@ -62,18 +62,50 @@ class LLMUnavailable(Exception):
     """A real model tier cannot run (no SDK / no API key / transport error)."""
 
 
+def _resolve_ca_bundle(explicit: str | None) -> str | None:
+    """Pick the CA bundle to verify TLS against: an explicit path wins, else the
+    standard ``SSL_CERT_FILE`` env var, else ``None`` (the SDK's own default).
+
+    This is the secure escape hatch for hosts behind a TLS-intercepting proxy:
+    point it at the corporate root CA. Verification is *never* disabled.
+    """
+    return explicit or os.environ.get("SSL_CERT_FILE") or None
+
+
 class AnthropicCaller:
     """A real model tier backed by the Anthropic API.
 
     The ``anthropic`` SDK is imported lazily so the package imports fine without
     it; a missing SDK or key surfaces as :class:`LLMUnavailable`, which the
     controller treats as a clean tier failure (it escalates) rather than a crash.
+
+    ``ca_bundle`` (or the ``SSL_CERT_FILE`` env var) points TLS verification at a
+    custom root CA — needed behind corporate proxies that re-sign HTTPS. TLS
+    verification stays on; this only changes *which* trust anchor is used.
     """
 
-    def __init__(self, name: str, model_id: str, *, max_tokens: int = 1024) -> None:
+    def __init__(
+        self,
+        name: str,
+        model_id: str,
+        *,
+        max_tokens: int = 1024,
+        ca_bundle: str | None = None,
+    ) -> None:
         self.name = name
         self.model_id = model_id
         self.max_tokens = max_tokens
+        self.ca_bundle = ca_bundle
+
+    def _client_kwargs(self) -> dict[str, Any]:
+        """Build kwargs for ``anthropic.Anthropic`` — an explicit verifying HTTP
+        client only when a custom CA bundle is configured."""
+        bundle = _resolve_ca_bundle(self.ca_bundle)
+        if bundle is None:
+            return {}
+        import httpx
+
+        return {"http_client": httpx.Client(verify=bundle)}
 
     def call(self, prompt: str) -> str:
         try:
@@ -83,7 +115,7 @@ class AnthropicCaller:
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise LLMUnavailable("ANTHROPIC_API_KEY is not set")
         try:
-            client = anthropic.Anthropic()
+            client = anthropic.Anthropic(**self._client_kwargs())
             msg = client.messages.create(
                 model=self.model_id,
                 max_tokens=self.max_tokens,

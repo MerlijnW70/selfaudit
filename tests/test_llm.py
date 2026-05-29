@@ -16,6 +16,7 @@ from selfaudit.llm import (
     LLMUnavailable,
     ScriptedCaller,
     Task,
+    _resolve_ca_bundle,
     _strip_code_fence,
     json_schema_validator,
 )
@@ -211,9 +212,56 @@ def test_anthropic_caller_happy_path_with_fake_client(monkeypatch) -> None:
             self.messages = _Messages()
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)  # default client, no custom CA
     monkeypatch.setattr(anthropic, "Anthropic", _FakeClient)
     out = AnthropicCaller("x", "model-id").call("hi")
     assert out == "hello world"  # only text blocks, concatenated
+
+
+def test_resolve_ca_bundle_precedence(monkeypatch) -> None:
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    assert _resolve_ca_bundle(None) is None
+    monkeypatch.setenv("SSL_CERT_FILE", "/env/ca.pem")
+    assert _resolve_ca_bundle(None) == "/env/ca.pem"
+    assert _resolve_ca_bundle("/explicit/ca.pem") == "/explicit/ca.pem"  # explicit wins
+
+
+def test_ca_bundle_builds_a_verifying_http_client(monkeypatch) -> None:
+    """A configured CA bundle is passed to a verifying httpx client — TLS stays on,
+    only the trust anchor changes (the fix for TLS-intercepting proxies)."""
+    import anthropic
+    import httpx
+
+    recorded: dict[str, object] = {}
+
+    class _FakeHttpx:
+        def __init__(self, *a, verify=None, **k) -> None:
+            recorded["verify"] = verify
+
+    class _Block:
+        type = "text"
+        text = "ok"
+
+    class _Msg:
+        content = [_Block()]
+
+    class _Messages:
+        def create(self, **kwargs):
+            return _Msg()
+
+    class _FakeClient:
+        def __init__(self, *a, **k) -> None:
+            recorded["http_client"] = k.get("http_client")
+            self.messages = _Messages()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "Client", _FakeHttpx)
+    monkeypatch.setattr(anthropic, "Anthropic", _FakeClient)
+
+    out = AnthropicCaller("x", "model-id", ca_bundle="/corp/ca.pem").call("hi")
+    assert out == "ok"
+    assert recorded["verify"] == "/corp/ca.pem"
+    assert isinstance(recorded["http_client"], _FakeHttpx)
 
 
 # --------------------------------------------------------------------------- #
