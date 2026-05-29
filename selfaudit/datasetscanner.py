@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from .audit import Attempt, AuditLog, ExpectationCheck, ReTest
 from .datasets import Check, CheckResult, Dataset, load_csv
 
+_ROWS_IN_AUDIT = 1000  # cap offending-row indices stored per check in the audit log
+
 
 @dataclass
 class ScanReport:
@@ -28,6 +30,7 @@ class ScanReport:
     log: AuditLog
     failed_checks: list[str] = field(default_factory=list)  # fail-severity violations
     warnings: list[str] = field(default_factory=list)  # warn/info violations
+    bad_rows: dict[str, list[int]] = field(default_factory=dict)  # check name -> offending rows
 
     @property
     def trusted(self) -> bool:
@@ -114,6 +117,7 @@ class SelfAuditingDatasetScanner:
         )
         failures: list[str] = []  # severity "fail"
         warnings: list[str] = []  # severity "warn"/"info"
+        bad_rows: dict[str, list[int]] = {}
         for idx, check in enumerate(self.checks, start=1):
             result = check.run(ds)
             expectation = _expectation(check, result)
@@ -138,6 +142,8 @@ class SelfAuditingDatasetScanner:
 
             is_failure = check.severity == "fail"
             (failures if is_failure else warnings).append(check.name)
+            if result.bad_rows:
+                bad_rows[check.name] = result.bad_rows
             decision = "flag" if is_failure else "warn"
             retest = _segment_retest(check, ds)
             log.attempts.append(
@@ -154,6 +160,7 @@ class SelfAuditingDatasetScanner:
                     decision,
                     f"[{check.severity.upper()}] rule violated in rows "
                     f"{_row_span(result.bad_rows)}; segment-analysed",
+                    rows=result.bad_rows[:_ROWS_IN_AUDIT],
                 )
             )
 
@@ -170,4 +177,4 @@ class SelfAuditingDatasetScanner:
             conclusion = "all checks passed — dataset satisfies every stated rule"
         log.finalize(status, None, None)
         log.conclusion = conclusion
-        return ScanReport(status, log, failures, warnings)
+        return ScanReport(status, log, failures, warnings, bad_rows)

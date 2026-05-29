@@ -70,6 +70,7 @@ class Attempt:
     decision: str  # "accept" | "escalate" | "skip"
     notes: str
     params: dict[str, Any] | None = None  # fitted model parameters (for model fitting)
+    rows: list[int] = field(default_factory=list)  # offending row indices (dataset checks)
 
 
 @dataclass
@@ -210,6 +211,10 @@ class AuditLog:
                     f"<details><summary>re-test: {escape(r.name)}</summary>"
                     f"<div class='notes'>{escape(r.conclusion)}</div></details>"
                 )
+            if a.rows:
+                shown = ", ".join(str(r) for r in a.rows[:15])
+                more = " …" if len(a.rows) > 15 else ""
+                cell += f"<div class='notes'>offending rows: {escape(shown)}{more}</div>"
             if a.notes:
                 cell += f"<div class='notes'>{escape(a.notes)}</div>"
             parts.append(
@@ -275,6 +280,10 @@ class AuditLog:
                         f"threshold={c.threshold:.1e}  {c.detail}"
                     )
                 lines.append(f"        => {r.conclusion}")
+            if a.rows:
+                shown = ", ".join(str(r) for r in a.rows[:15])
+                more = " …" if len(a.rows) > 15 else ""
+                lines.append(f"    offending rows: {shown}{more}")
             lines.append(f"    DECISION: {a.decision.upper()}  ({a.notes})")
         labels = {
             "solved": "solved",

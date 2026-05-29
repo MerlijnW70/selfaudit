@@ -18,6 +18,7 @@ Example::
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 
 from .audit import enable_utf8_output
@@ -40,7 +41,7 @@ from .datasets import (
     values_in_range,
     values_of_type,
 )
-from .datasetscanner import SelfAuditingDatasetScanner
+from .datasetscanner import ScanReport, SelfAuditingDatasetScanner
 from .sources import SourceUnavailable, crypto_prices, fetch_csv, open_meteo, usgs_earthquakes
 
 
@@ -226,6 +227,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--json", metavar="PATH", help="write the audit log to PATH as JSON")
     p.add_argument("--html", metavar="PATH", help="write a shareable HTML trust report to PATH")
+    p.add_argument(
+        "--bad-rows",
+        metavar="PATH",
+        help="write the flagged rows (with their data + which checks failed) to a CSV",
+    )
     p.add_argument("--quiet", action="store_true", help="print only the final verdict")
     return p
 
@@ -242,6 +248,22 @@ def _checks_from_args(args: argparse.Namespace) -> list[Check]:
     checks += [_parse_type(s) for s in args.type]
     checks += [_parse_allowed(s) for s in args.allowed]
     return checks
+
+
+def _write_bad_rows(path: str, ds: Dataset, report: ScanReport) -> int:
+    """Write every flagged row (its data + which checks failed) to a CSV. Returns
+    the number of rows written. Lets a user open exactly the offending rows."""
+    by_row: dict[int, list[str]] = {}
+    for name, idxs in report.bad_rows.items():
+        for i in idxs:
+            by_row.setdefault(i, []).append(name)
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["_row", *ds.columns, "_failed_checks"])
+        for i in sorted(by_row):
+            row = ds.rows[i]
+            writer.writerow([i, *[row.get(c, "") for c in ds.columns], ";".join(by_row[i])])
+    return len(by_row)
 
 
 def _load_source(args: argparse.Namespace) -> Dataset:
@@ -321,6 +343,9 @@ def run(argv: list[str] | None = None) -> int:
         report.log.save(args.json)
     if args.html:
         report.log.save_html(args.html, chart=svg_chart(ds))
+    if args.bad_rows:
+        n = _write_bad_rows(args.bad_rows, ds, report)
+        print(f"wrote {n} flagged rows to {args.bad_rows}")
     print(
         f"verdict: {report.status.upper()}  "
         f"(failures: {report.failed_checks or 'none'}; warnings: {report.warnings or 'none'})"

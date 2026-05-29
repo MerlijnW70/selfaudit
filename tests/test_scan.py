@@ -218,6 +218,33 @@ def test_run_bad_rules_file_is_error(tmp_path, capsys) -> None:
     assert "bad rules file" in capsys.readouterr().err
 
 
+def test_run_writes_bad_rows_csv(tmp_path, capsys) -> None:
+    body = "id,age\n1,30\n2,999\n3,40\n2,50\n"  # row 1 age outlier-ish? no; plant via rules
+    csv_path = _write_csv(tmp_path, body)
+    out = tmp_path / "bad.csv"
+    # unique(id) flags the duplicate '2'; type(age:int) all ok; range flags 999
+    run(
+        [
+            csv_path,
+            "--unique",
+            "id",
+            "--range",
+            "age:0:100",
+            "--bad-rows",
+            str(out),
+            "--quiet",
+        ]
+    )
+    assert out.exists()
+    lines = out.read_text(encoding="utf-8").strip().splitlines()
+    assert lines[0] == "_row,id,age,_failed_checks"
+    # the duplicate id (row 3) and the out-of-range age (row 1) are exported, with the check names
+    body_rows = lines[1:]
+    assert any("range[age]" in r for r in body_rows)
+    assert any("unique[id]" in r for r in body_rows)
+    assert "wrote" in capsys.readouterr().out
+
+
 def test_run_writes_html_report(tmp_path) -> None:
     csv = _write_csv(tmp_path, _DIRTY)
     out_html = tmp_path / "report.html"

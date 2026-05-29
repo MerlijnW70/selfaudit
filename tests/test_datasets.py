@@ -444,6 +444,20 @@ def test_scan_trusted_when_all_pass() -> None:
     assert report.log.attempts[0].decision == "accept"
 
 
+def test_scan_records_offending_rows() -> None:
+    temps = ["20"] * 50
+    for i in (20, 21, 22):
+        temps[i] = "999"
+    report = SelfAuditingDatasetScanner([values_in_range("temperature", -50, 150)]).scan(_ds(temps))
+    # the offending row indices are on the attempt (so they reach JSON) ...
+    flagged = report.log.attempts[0]
+    assert flagged.rows == [20, 21, 22]
+    # ... and the full set is exposed per check for export
+    assert report.bad_rows["range[temperature]"] == [20, 21, 22]
+    # ... and they render in the text report
+    assert "offending rows: 20, 21, 22" in report.log.render()
+
+
 def test_scan_untrusted_flags_and_localizes() -> None:
     temps = ["20"] * 50
     for i in range(20, 30):
