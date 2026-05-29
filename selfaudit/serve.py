@@ -27,12 +27,15 @@ _SOURCES: dict[str, Callable[..., Dataset]] = {
 
 
 def _sample_csv() -> str:
-    """A tiny demo dataset with a planted gap (row 8) and outlier (row 6) so the
-    'Sample CSV' button shows a non-trivial UNTRUSTED verdict with zero setup."""
-    rows = ["timestamp,sensor_id,temperature"]
+    """A tiny, relatable demo table (customers/orders) with a planted gap and an
+    outlier, so the 'Sample CSV' button shows a non-trivial verdict with zero
+    setup — domain-neutral, not sensor-specific."""
+    rows = ["customer_id,age,order_amount,status"]
+    statuses = ("active", "churned")
     for i in range(12):
-        temp = "" if i == 8 else ("250.0" if i == 6 else f"{20 + i % 5}.0")
-        rows.append(f"{i},S1,{temp}")
+        age = 25 + (i * 3) % 40
+        amount = "" if i == 8 else ("99999" if i == 5 else f"{40 + (i * 7) % 120}")
+        rows.append(f"C{i + 1:03d},{age},{amount},{statuses[i % 2]}")
     return "\n".join(rows) + "\n"
 
 
