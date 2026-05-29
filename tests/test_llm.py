@@ -224,7 +224,7 @@ def test_anthropic_caller_without_key_is_unavailable(monkeypatch) -> None:
 
 
 def test_anthropic_caller_happy_path_with_fake_client(monkeypatch) -> None:
-    import anthropic
+    anthropic = pytest.importorskip("anthropic")
 
     class _Block:
         def __init__(self, type_: str, text: str) -> None:
@@ -315,8 +315,8 @@ def test_resolve_ca_bundle_precedence(monkeypatch) -> None:
 def test_ca_bundle_builds_a_verifying_http_client(monkeypatch) -> None:
     """A configured CA bundle is passed to a verifying httpx client — TLS stays on,
     only the trust anchor changes (the fix for TLS-intercepting proxies)."""
-    import anthropic
-    import httpx
+    anthropic = pytest.importorskip("anthropic")
+    httpx = pytest.importorskip("httpx")
 
     recorded: dict[str, object] = {}
 

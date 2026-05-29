@@ -1,0 +1,54 @@
+name: Data trust
+
+# Demonstrates the selfaudit action as a PR gate: scan a dataset and post the
+# TRUSTED / REVIEW / UNTRUSTED verdict as a comment. Swap examples/sample.csv for
+# your own data file (or use `source:` for a live feed).
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan dataset
+        id: audit
+        continue-on-error: true # comment the verdict even when UNTRUSTED
+        uses: ./
+        with:
+          dataset: examples/sample.csv
+          html-report: trust-report.html
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trust-report
+          path: trust-report.html
+      - name: Comment verdict on the PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const verdict = "${{ steps.audit.outputs.verdict }}" || "UNKNOWN";
+            const icon = { TRUSTED: "✅", REVIEW: "⚠️", UNTRUSTED: "❌" }[verdict] || "❔";
+            const body = [
+              `### ${icon} selfaudit data-trust: **${verdict}**`,
+              "",
+              "Scanned `examples/sample.csv` with zero-config rule inference.",
+              "The full HTML report is attached to this run as the `trust-report` artifact.",
+            ].join("\n");
+            if (context.issue.number) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Fail the job if the dataset is untrusted
+        if: steps.audit.outcome == 'failure'
+        run: |
+          echo "dataset did not pass the trust gate"
+          exit 1

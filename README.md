@@ -15,6 +15,22 @@ re-tests every anomaly, and prints a verdict — **TRUSTED**, **NEEDS REVIEW**
 (warnings only), or **UNTRUSTED** — exiting `0`/`0`/`1` so it drops into CI. Add
 `--html report.html` for a shareable report, `--strict` to fail on warnings too.
 
+### As a GitHub Action
+
+This repo *is* an action — gate a dataset in any workflow and get the verdict
+posted on the PR:
+
+```yaml
+- uses: MerlijnW70/selfaudit@master
+  with:
+    dataset: data/customers.csv   # or a URL, or use: source: crypto
+    args: --strict                # optional
+```
+
+The step fails the build on `UNTRUSTED`, exposes a `verdict` output
+(`TRUSTED`/`REVIEW`/`UNTRUSTED`), and can write an HTML report. See
+`.github/workflows/data-trust.yml` for a PR-comment example.
+
 ---
 
 An experiment in *self-correcting algorithms*: a system that holds an

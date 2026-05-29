@@ -1,0 +1,51 @@
+name: "selfaudit dataset trust scan"
+description: "Vet a dataset's trustworthiness and fail the build when it is untrusted."
+branding:
+  icon: "shield"
+  color: "green"
+
+inputs:
+  dataset:
+    description: "CSV path or URL to scan (leave empty to use 'source')"
+    required: false
+    default: ""
+  source:
+    description: "Scan a live source instead of a file: open-meteo | usgs | crypto"
+    required: false
+    default: ""
+  args:
+    description: "Extra args passed to selfaudit, e.g. '--strict --range temperature:-50:150'"
+    required: false
+    default: ""
+  html-report:
+    description: "Optional path to write a shareable HTML trust report"
+    required: false
+    default: ""
+
+outputs:
+  verdict:
+    description: "TRUSTED | REVIEW | UNTRUSTED"
+    value: ${{ steps.scan.outputs.verdict }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+    - name: Install selfaudit
+      shell: bash
+      run: pip install "${{ github.action_path }}"
+    - name: Scan
+      id: scan
+      shell: bash
+      run: |
+        set +e
+        src=""; [ -n "${{ inputs.source }}" ] && src="--source ${{ inputs.source }}"
+        html=""; [ -n "${{ inputs.html-report }}" ] && html="--html ${{ inputs.html-report }}"
+        out=$(selfaudit ${{ inputs.dataset }} $src $html ${{ inputs.args }} 2>&1)
+        code=$?
+        echo "$out"
+        verdict=$(printf '%s\n' "$out" | grep -oE 'verdict: [A-Z]+' | awk '{print $2}')
+        echo "verdict=${verdict:-UNKNOWN}" >> "$GITHUB_OUTPUT"
+        exit $code
