@@ -8,6 +8,7 @@ from .datasets import (
     Check,
     CheckResult,
     Dataset,
+    allowed_values,
     distribution_stationary,
     duplicate_rate_below,
     infer_checks,
@@ -21,7 +22,9 @@ from .datasets import (
     parse_text,
     svg_chart,
     timestamps_monotonic,
+    unique_key,
     values_in_range,
+    values_of_type,
 )
 from .datasetscanner import ScanReport, SelfAuditingDatasetScanner
 from .diagnostician import AnomalyDetected, FitDiagnosis, SelfAuditingFitter
@@ -89,6 +92,9 @@ __all__ = [
     "duplicate_rate_below",
     "distribution_stationary",
     "iqr_outliers",
+    "unique_key",
+    "values_of_type",
+    "allowed_values",
     "infer_checks",
     "open_meteo",
     "usgs_earthquakes",

@@ -9,6 +9,7 @@ import pytest
 from selfaudit.datasets import (
     Check,
     Dataset,
+    allowed_values,
     distribution_stationary,
     duplicate_rate_below,
     infer_checks,
@@ -21,7 +22,9 @@ from selfaudit.datasets import (
     parse_text,
     svg_chart,
     timestamps_monotonic,
+    unique_key,
     values_in_range,
+    values_of_type,
 )
 from selfaudit.datasetscanner import SelfAuditingDatasetScanner, _segment_retest
 
@@ -208,6 +211,51 @@ def test_distribution_stationary_flags_shift_and_skips_tiny() -> None:
     assert not distribution_stationary("temperature", max_shift=3.0).run(ds).ok
     # too few points -> trivially ok
     assert distribution_stationary("temperature").run(_ds(["1", "2"])).ok
+
+
+# --------------------------------------------------------------------------- #
+# Schema-level checks: unique key, type, allowed values
+# --------------------------------------------------------------------------- #
+
+
+def test_unique_key_flags_duplicate_keys() -> None:
+    rows = [{"id": "A"}, {"id": "B"}, {"id": "A"}, {"id": "C"}]
+    res = unique_key(["id"]).run(Dataset(["id"], rows, "k"))
+    assert not res.ok
+    assert res.bad_rows == [2]  # the repeat of A
+
+
+def test_unique_key_composite() -> None:
+    rows = [{"a": "1", "b": "x"}, {"a": "1", "b": "y"}, {"a": "1", "b": "x"}]
+    res = unique_key(["a", "b"]).run(Dataset(["a", "b"], rows, "k"))
+    assert res.bad_rows == [2]  # (1,x) repeats; (1,y) is distinct
+
+
+def test_values_of_type_int_and_date() -> None:
+    ints = Dataset(["age"], [{"age": "30"}, {"age": "3.5"}, {"age": "x"}, {"age": ""}], "t")
+    res = values_of_type("age", "int").run(ints)
+    assert not res.ok
+    assert res.bad_rows == [1, 2]  # 3.5 and x are not int; "" ignored
+    dates = Dataset(["d"], [{"d": "2023-01-01"}, {"d": "01-01-2023"}, {"d": "nope"}], "t")
+    assert values_of_type("d", "date").run(dates).bad_rows == [2]
+
+
+def test_values_of_type_bool_and_clean() -> None:
+    bools = Dataset(["b"], [{"b": "true"}, {"b": "NO"}, {"b": "1"}, {"b": "maybe"}], "t")
+    assert values_of_type("b", "bool").run(bools).bad_rows == [3]
+    assert values_of_type("temperature", "float").run(_ds(["1.5", "2", "3.0"])).ok
+
+
+def test_allowed_values_whitelist() -> None:
+    rows = [{"s": "active"}, {"s": "churned"}, {"s": "frozen"}, {"s": ""}]
+    res = allowed_values("s", ["active", "churned"]).run(Dataset(["s"], rows, "t"))
+    assert not res.ok
+    assert res.bad_rows == [2]  # 'frozen' not allowed; '' ignored
+    assert (
+        allowed_values("s", ["active", "churned"])
+        .run(Dataset(["s"], [{"s": "active"}, {"s": "churned"}], "t"))
+        .ok
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -22,6 +22,7 @@ import json
 import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from datetime import date, datetime
 
 
 @dataclass
@@ -370,6 +371,126 @@ def distribution_stationary(
         )
 
     return Check(f"stationary[{field_name}]", run, severity)
+
+
+def unique_key(fields: Iterable[str], *, severity: str = "fail") -> Check:
+    """The combination of ``fields`` must be unique across rows — a primary-key
+    check (e.g. no duplicate ``customer_id``). Flags every row whose key repeats."""
+    cols = list(fields)
+    label = "+".join(cols)
+
+    def run(ds: Dataset) -> CheckResult:
+        seen: set[tuple[str, ...]] = set()
+        bad: list[int] = []
+        for i, row in enumerate(ds.rows):
+            key = tuple((row.get(c) or "").strip() for c in cols)
+            if key in seen:
+                bad.append(i)
+            else:
+                seen.add(key)
+        return CheckResult(
+            ok=not bad,
+            measured=_fraction(len(bad), ds.n),
+            threshold=0.0,
+            detail=f"{len(bad)}/{ds.n} rows duplicate the key ({label})",
+            bad_rows=bad,
+        )
+
+    return Check(f"unique[{label}]", run, severity)
+
+
+def _is_int(s: str) -> bool:
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_float(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_bool(s: str) -> bool:
+    return s.lower() in {"true", "false", "0", "1", "yes", "no", "y", "n", "t", "f"}
+
+
+_DATE_FORMATS = ("%d-%m-%Y", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S")
+
+
+def _is_date(s: str) -> bool:
+    for parser in (date.fromisoformat, datetime.fromisoformat):
+        try:
+            parser(s)
+            return True
+        except ValueError:
+            pass
+    for fmt in _DATE_FORMATS:
+        try:
+            datetime.strptime(s, fmt)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+_TYPE_PARSERS: dict[str, Callable[[str], bool]] = {
+    "int": _is_int,
+    "float": _is_float,
+    "bool": _is_bool,
+    "date": _is_date,
+}
+
+
+def values_of_type(
+    field_name: str, type_name: str, *, max_fraction: float = 0.0, severity: str = "fail"
+) -> Check:
+    """Every non-empty value in ``field_name`` must parse as ``type_name``
+    (``int`` / ``float`` / ``bool`` / ``date``). Missing values are ignored here."""
+    parser = _TYPE_PARSERS[type_name]
+
+    def run(ds: Dataset) -> CheckResult:
+        bad = [
+            i
+            for i, row in enumerate(ds.rows)
+            if (raw := (row.get(field_name) or "").strip()) != "" and not parser(raw)
+        ]
+        return CheckResult(
+            ok=_fraction(len(bad), ds.n) <= max_fraction,
+            measured=_fraction(len(bad), ds.n),
+            threshold=max_fraction,
+            detail=f"{len(bad)}/{ds.n} {field_name} values are not valid {type_name}",
+            bad_rows=bad,
+        )
+
+    return Check(f"type[{field_name}={type_name}]", run, severity)
+
+
+def allowed_values(field_name: str, allowed: Iterable[str], *, severity: str = "fail") -> Check:
+    """Every non-empty value in ``field_name`` must be one of ``allowed`` (a
+    categorical whitelist, e.g. ``status ∈ {active, churned}``)."""
+    allowed_set = set(allowed)
+
+    def run(ds: Dataset) -> CheckResult:
+        bad = [
+            i
+            for i, row in enumerate(ds.rows)
+            if (raw := (row.get(field_name) or "").strip()) != "" and raw not in allowed_set
+        ]
+        preview = ", ".join(sorted(allowed_set)[:6])
+        return CheckResult(
+            ok=not bad,
+            measured=_fraction(len(bad), ds.n),
+            threshold=0.0,
+            detail=f"{len(bad)}/{ds.n} {field_name} values not in {{{preview}}}",
+            bad_rows=bad,
+        )
+
+    return Check(f"allowed[{field_name}]", run, severity)
 
 
 def _percentile(sorted_vals: list[float], q: float) -> float:

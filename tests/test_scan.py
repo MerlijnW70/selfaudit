@@ -9,9 +9,12 @@ import pytest
 from selfaudit import scan
 from selfaudit.datasets import Dataset
 from selfaudit.scan import (
+    _parse_allowed,
     _parse_missing,
     _parse_range,
     _parse_stationary,
+    _parse_type,
+    _parse_unique,
     run,
 )
 from selfaudit.sources import SourceUnavailable
@@ -54,6 +57,21 @@ def test_parse_stationary_default_and_explicit() -> None:
     assert _parse_stationary("temp:2.5").name == "stationary[temp]"
     with pytest.raises(ValueError):
         _parse_stationary("temp:notnum")
+
+
+def test_parse_unique_type_allowed() -> None:
+    assert _parse_unique("id").name == "unique[id]"
+    assert _parse_unique("a,b").name == "unique[a+b]"
+    assert _parse_type("age:int").name == "type[age=int]"
+    assert _parse_allowed("status:active,churned").name == "allowed[status]"
+    with pytest.raises(ValueError):
+        _parse_type("age:integer")  # unknown type
+    with pytest.raises(ValueError):
+        _parse_type("noColon")
+    with pytest.raises(ValueError):
+        _parse_allowed("status:")  # no values
+    with pytest.raises(ValueError):
+        _parse_unique(",")  # no fields
 
 
 # --------------------------------------------------------------------------- #
@@ -208,6 +226,33 @@ def test_run_csv_url_unavailable_returns_three(monkeypatch, capsys) -> None:
     monkeypatch.setattr(scan, "fetch_csv", offline)
     assert run(["https://example.com/d.csv"]) == 3
     assert "source unavailable" in capsys.readouterr().err
+
+
+def test_run_schema_checks_flag_violations(tmp_path, capsys) -> None:
+    body = (
+        "id,age,status\n"
+        "1,30,active\n"
+        "2,xx,churned\n"  # age not int
+        "1,40,frozen\n"  # duplicate id + status not allowed
+    )
+    csv = _write_csv(tmp_path, body)
+    code = run(
+        [
+            csv,
+            "--unique",
+            "id",
+            "--type",
+            "age:int",
+            "--allowed",
+            "status:active,churned",
+            "--quiet",
+        ]
+    )
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "UNTRUSTED" in out
+    for name in ("unique[id]", "type[age=int]", "allowed[status]"):
+        assert name in out
 
 
 def test_run_all_check_kinds_together(tmp_path, capsys) -> None:

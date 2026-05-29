@@ -24,6 +24,7 @@ from .audit import enable_utf8_output
 from .datasets import (
     Check,
     Dataset,
+    allowed_values,
     distribution_stationary,
     duplicate_rate_below,
     infer_checks,
@@ -31,7 +32,9 @@ from .datasets import (
     no_missing_required,
     svg_chart,
     timestamps_monotonic,
+    unique_key,
     values_in_range,
+    values_of_type,
 )
 from .datasetscanner import SelfAuditingDatasetScanner
 from .sources import SourceUnavailable, crypto_prices, fetch_csv, open_meteo, usgs_earthquakes
@@ -61,6 +64,37 @@ def _parse_missing(spec: str) -> Check:
     if not fields:
         raise ValueError(f"--missing expects FIELDS[:MAXFRAC], got {spec!r}")
     return no_missing_required(fields, max_fraction=frac)
+
+
+_TYPE_NAMES = ("int", "float", "bool", "date")
+
+
+def _parse_type(spec: str) -> Check:
+    if ":" not in spec:
+        raise ValueError(f"--type expects FIELD:TYPE, got {spec!r}")
+    field, type_name = spec.rsplit(":", 1)
+    if not field:
+        raise ValueError(f"--type expects FIELD:TYPE, got {spec!r}")
+    if type_name not in _TYPE_NAMES:
+        raise ValueError(f"--type TYPE must be one of {', '.join(_TYPE_NAMES)}, got {type_name!r}")
+    return values_of_type(field, type_name)
+
+
+def _parse_allowed(spec: str) -> Check:
+    if ":" not in spec:
+        raise ValueError(f"--allowed expects FIELD:v1,v2,..., got {spec!r}")
+    field, values_part = spec.split(":", 1)
+    allowed = [v for v in values_part.split(",") if v != ""]
+    if not field or not allowed:
+        raise ValueError(f"--allowed expects FIELD:v1,v2,..., got {spec!r}")
+    return allowed_values(field, allowed)
+
+
+def _parse_unique(spec: str) -> Check:
+    fields = [f for f in spec.split(",") if f]
+    if not fields:
+        raise ValueError(f"--unique expects FIELD[,FIELD...], got {spec!r}")
+    return unique_key(fields)
 
 
 def _parse_stationary(spec: str) -> Check:
@@ -146,6 +180,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="FIELD mean must not shift by more than MAXSHIFT sigma (default 3)",
     )
     p.add_argument(
+        "--unique",
+        action="append",
+        default=[],
+        metavar="FIELD[,FIELD...]",
+        help="the (combined) FIELD(s) must be unique — a primary-key check (repeatable)",
+    )
+    p.add_argument(
+        "--type",
+        action="append",
+        default=[],
+        metavar="FIELD:TYPE",
+        help="FIELD values must parse as TYPE (int|float|bool|date) (repeatable)",
+    )
+    p.add_argument(
+        "--allowed",
+        action="append",
+        default=[],
+        metavar="FIELD:v1,v2,...",
+        help="FIELD values must be one of the listed values (repeatable)",
+    )
+    p.add_argument(
         "--infer",
         action="store_true",
         help="auto-propose checks from the data itself (zero-config; ignores rule flags)",
@@ -169,6 +224,9 @@ def _checks_from_args(args: argparse.Namespace) -> list[Check]:
     if args.duplicates is not None:
         checks.append(duplicate_rate_below(max_fraction=args.duplicates))
     checks += [_parse_stationary(s) for s in args.stationary]
+    checks += [_parse_unique(s) for s in args.unique]
+    checks += [_parse_type(s) for s in args.type]
+    checks += [_parse_allowed(s) for s in args.allowed]
     return checks
 
 

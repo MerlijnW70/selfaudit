@@ -97,6 +97,8 @@ selfaudit https://host/data.csv                      # scan a CSV by URL
 selfaudit --source crypto                            # scan a free live feed
 selfaudit data.csv --range temperature:-50:150 \
                    --missing id,email:0.01           # explicit rules
+selfaudit data.csv --unique customer_id \
+                   --type age:int --allowed status:active,churned   # schema rules
 selfaudit data.csv --strict                          # warnings fail too
 ```
 
