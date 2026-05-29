@@ -663,15 +663,22 @@ def infer_specs(ds: Dataset, *, missing_fraction: float = 0.01) -> list[dict]:
     ]
     for col in ds.columns:
         present = _looks_numeric(ds, col)
-        if not present or len(set(present)) < 5:
+        n = len(present)
+        if len(set(present)) < 5:
             continue  # non-numeric, too sparse, or low-cardinality (codes/flags)
         decreases = sum(1 for a, b in zip(present, present[1:], strict=False) if b < a)
-        is_ordered = decreases <= 0.05 * len(present) and present[-1] > present[0]
+        near_sorted = decreases <= 0.05 * n
+        unique_ish = len(set(present)) >= 0.9 * n  # an index/timestamp has near-unique values
         specs.append({"check": "outliers", "field": col, "k": 3.0})
-        if is_ordered:
+        if near_sorted and unique_ish and present[-1] > present[0]:
+            # a genuine ascending index/timestamp -> catch out-of-order rows
             specs.append({"check": "monotonic", "field": col})
-        else:
+        elif not near_sorted:
+            # unsorted values -> a regime shift between halves is meaningful
             specs.append({"check": "stationary", "field": col, "max_shift": 3.0})
+        # else: a sorted-but-not-unique value column (e.g. a price-sorted export) —
+        # neither monotonic nor stationarity is meaningful (sorting trips both), so
+        # only the outlier check applies.
     return specs
 
 

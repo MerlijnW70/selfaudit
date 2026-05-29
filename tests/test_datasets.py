@@ -290,6 +290,19 @@ def test_iqr_outliers_zero_spread_is_not_flagged() -> None:
     assert "zero IQR" in res.detail
 
 
+def test_infer_skips_monotonic_on_a_sorted_value_column() -> None:
+    # A pre-sorted value column (ascending, many duplicates) — like 'price' in a
+    # price-sorted export, or a day-of-month that resets. Neither monotonic nor
+    # stationarity should fire (both falsely trip on merely-sorted data); only the
+    # outlier check. (Dogfood finding: diamonds 'price', airquality 'Day'.)
+    vals = sorted([10, 20, 30, 40, 50, 60] * 8)  # 48 rows, ascending, 6 distinct
+    rows = [{"price": str(v)} for v in vals]
+    kinds = {
+        s["check"] for s in infer_specs(Dataset(["price"], rows, "d")) if s.get("field") == "price"
+    }
+    assert kinds == {"outliers"}  # no monotonic, no stationary on a sorted value column
+
+
 def test_infer_skips_stationarity_on_an_index_column() -> None:
     # A sequential index (1..N) must get monotonic, NOT stationary (the Titanic
     # 'PassengerId' false-positive: a trending mean on an index is expected).
