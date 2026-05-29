@@ -38,6 +38,13 @@ Application 2 — anomaly detection in sensor data (physics/engineering):
 - `selfaudit/sensordemo.py` — demo runner that produces `sensor_audit_log.json`.
 - `tests/test_fitting.py` — pytest suite for the anomaly detection.
 
+## Requirements
+
+- Python ≥ 3.10
+- [`scipy`](https://scipy.org/) ≥ 1.10 — the root-finder engine (App 1). App 2 is
+  pure standard library.
+- Dev/quality gates: `pytest`, `ruff`, `mypy` (run via the ANVIL gate, see below).
+
 ## Usage
 
 ```bash
@@ -100,3 +107,7 @@ The whiteness test (structured vs. white residual) is the main discriminator;
 the bootstrap only runs when the residual is white-ish (possibly noise). Pure
 noise (`pure_noise_signal`) therefore always yields the noise verdict, never a
 "discovery".
+
+## License
+
+MIT — see [LICENSE](LICENSE).

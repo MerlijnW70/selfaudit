@@ -3,6 +3,7 @@ name = "selfaudit"
 version = "0.1.0"
 description = "Self-Auditing AI: een zelf-corrigerende numerieke solver met volledige audit-trail"
 requires-python = ">=3.10"
+license = { text = "MIT" }
 dependencies = ["scipy>=1.10"]
 
 [build-system]
