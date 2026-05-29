@@ -6,12 +6,15 @@ import json
 
 import pytest
 
+from selfaudit import scan
+from selfaudit.datasets import Dataset
 from selfaudit.scan import (
     _parse_missing,
     _parse_range,
     _parse_stationary,
     run,
 )
+from selfaudit.sources import SourceUnavailable
 
 
 def _write_csv(tmp_path, body: str):
@@ -100,6 +103,40 @@ def test_run_bad_spec_is_usage_error(tmp_path, capsys) -> None:
     csv = _write_csv(tmp_path, _CLEAN)
     assert run([csv, "--range", "temperature:bad:range"]) == 2
     assert "error:" in capsys.readouterr().err
+
+
+def test_run_with_open_meteo_source(monkeypatch, capsys) -> None:
+    rows = [{"time": f"t{i}", "epoch": str(i), "temperature": str(20 + i)} for i in range(6)]
+    ds = Dataset(["time", "epoch", "temperature"], rows, "open-meteo@test")
+    monkeypatch.setattr(scan, "open_meteo", lambda lat, lon, forecast_days=2: ds)
+    code = run(["--source", "open-meteo", "--range", "temperature:-50:60", "--quiet"])
+    assert code == 0
+    assert "TRUSTED" in capsys.readouterr().out
+
+
+def test_run_with_usgs_source_flags_newest_first(monkeypatch, capsys) -> None:
+    rows = [{"time": str(100 - i), "mag": "2.0"} for i in range(6)]  # decreasing time
+    ds = Dataset(["time", "mag"], rows, "usgs:all_hour")
+    monkeypatch.setattr(scan, "usgs_earthquakes", lambda period="all_hour": ds)
+    code = run(["--source", "usgs", "--monotonic", "time", "--quiet"])
+    assert code == 1  # newest-first feed -> monotonic check fails
+    assert "UNTRUSTED" in capsys.readouterr().out
+
+
+def test_run_source_unavailable_returns_three(monkeypatch, capsys) -> None:
+    def offline(*a, **k):
+        raise SourceUnavailable("offline")
+
+    monkeypatch.setattr(scan, "open_meteo", offline)
+    code = run(["--source", "open-meteo", "--range", "temperature:-50:60"])
+    assert code == 3
+    assert "live source unavailable" in capsys.readouterr().err
+
+
+def test_run_rejects_both_csv_and_source(tmp_path, capsys) -> None:
+    csv = _write_csv(tmp_path, _CLEAN)
+    assert run([csv, "--source", "usgs", "--monotonic", "time"]) == 2
+    assert "not both" in capsys.readouterr().err
 
 
 def test_run_all_check_kinds_together(tmp_path, capsys) -> None:

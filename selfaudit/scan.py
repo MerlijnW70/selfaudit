@@ -22,6 +22,7 @@ import sys
 
 from .datasets import (
     Check,
+    Dataset,
     distribution_stationary,
     duplicate_rate_below,
     no_missing_required,
@@ -29,6 +30,7 @@ from .datasets import (
     values_in_range,
 )
 from .datasetscanner import SelfAuditingDatasetScanner
+from .sources import SourceUnavailable, open_meteo, usgs_earthquakes
 
 
 def _parse_range(spec: str) -> Check:
@@ -76,7 +78,26 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m selfaudit.scan",
         description="Scan a CSV against explicit rules; re-test and audit every violation.",
     )
-    p.add_argument("csv", help="path to the CSV file to scan")
+    p.add_argument(
+        "csv",
+        nargs="?",
+        help="path to the CSV file to scan (omit when using --source)",
+    )
+    p.add_argument(
+        "--source",
+        choices=["open-meteo", "usgs"],
+        help="fetch a free, real-time dataset instead of reading a CSV",
+    )
+    p.add_argument("--lat", type=float, default=52.37, help="latitude for --source open-meteo")
+    p.add_argument("--lon", type=float, default=4.90, help="longitude for --source open-meteo")
+    p.add_argument(
+        "--forecast-days", type=int, default=2, help="forecast days for --source open-meteo"
+    )
+    p.add_argument(
+        "--period",
+        default="all_hour",
+        help="feed period for --source usgs (e.g. all_hour, all_day, significant_week)",
+    )
     p.add_argument(
         "--range",
         action="append",
@@ -127,8 +148,23 @@ def _checks_from_args(args: argparse.Namespace) -> list[Check]:
     return checks
 
 
+def _load_source(args: argparse.Namespace) -> Dataset:
+    """Resolve the input dataset from --source, fetching live data as needed."""
+    if args.source == "open-meteo":
+        return open_meteo(args.lat, args.lon, forecast_days=args.forecast_days)
+    return usgs_earthquakes(args.period)
+
+
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.source and args.csv:
+        print("error: give either a CSV path or --source, not both", file=sys.stderr)
+        return 2
+    if not args.source and not args.csv:
+        print("error: provide a CSV path or --source {open-meteo,usgs}", file=sys.stderr)
+        return 2
+
     try:
         checks = _checks_from_args(args)
     except ValueError as exc:
@@ -142,7 +178,13 @@ def run(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    report = SelfAuditingDatasetScanner(checks).scan(args.csv)
+    try:
+        source = _load_source(args) if args.source else args.csv
+    except SourceUnavailable as exc:
+        print(f"error: live source unavailable — {exc}", file=sys.stderr)
+        return 3
+
+    report = SelfAuditingDatasetScanner(checks).scan(source)
     if not args.quiet:
         print(report.log.render())
     if args.json:

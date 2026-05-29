@@ -213,6 +213,15 @@ analysis classifies it as "systemic, dataset-wide". That is not a data error: th
 USGS feed is documented as newest-first, so the scanner surfaced and explained a
 real ordering property automatically.
 
+The CLI scans a live source directly — pass `--source` instead of a CSV path:
+
+```bash
+python -m selfaudit.scan --source open-meteo --lat 52.37 --lon 4.90 \
+    --range temperature:-50:60 --monotonic epoch        # -> TRUSTED (exit 0)
+python -m selfaudit.scan --source usgs --monotonic time --range mag:-2:10
+                                                        # -> UNTRUSTED (exit 1)
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
