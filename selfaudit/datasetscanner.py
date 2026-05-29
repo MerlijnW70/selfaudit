@@ -74,7 +74,8 @@ def _segment_retest(check: Check, ds: Dataset, n_segments: int = 5) -> ReTest:
         start, end = failing[0]
         concl = (
             f"violation reproduces in exactly one segment (rows {start}–{end - 1}): "
-            f"a localized burst — likely a regime shift or a faulty-sensor window"
+            f"a localized burst — the problem is concentrated in one part of the data "
+            f"(e.g. an appended block, a format change, or a regime shift), not spread evenly"
         )
     elif len(failing) == total:
         concl = "violation reproduces in every segment: a systemic, dataset-wide problem"
