@@ -26,6 +26,8 @@ from .datasets import (
     Dataset,
     distribution_stationary,
     duplicate_rate_below,
+    infer_checks,
+    load_csv,
     no_missing_required,
     timestamps_monotonic,
     values_in_range,
@@ -136,7 +138,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FIELD[:MAXSHIFT]",
         help="FIELD mean must not shift by more than MAXSHIFT sigma (default 3)",
     )
+    p.add_argument(
+        "--infer",
+        action="store_true",
+        help="auto-propose checks from the data itself (zero-config; ignores rule flags)",
+    )
     p.add_argument("--json", metavar="PATH", help="write the audit log to PATH as JSON")
+    p.add_argument("--html", metavar="PATH", help="write a shareable HTML trust report to PATH")
     p.add_argument("--quiet", action="store_true", help="print only the final verdict")
     return p
 
@@ -169,33 +177,44 @@ def run(argv: list[str] | None = None) -> int:
         print("error: give either a CSV path or --source, not both", file=sys.stderr)
         return 2
     if not args.source and not args.csv:
-        print("error: provide a CSV path or --source {open-meteo,usgs}", file=sys.stderr)
+        print("error: provide a CSV path or --source {open-meteo,usgs,crypto}", file=sys.stderr)
         return 2
 
+    # Load the dataset first — inference needs to see the data.
     try:
-        checks = _checks_from_args(args)
-    except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    if not checks:
-        print(
-            "error: no checks specified — use --range/--monotonic/--missing/"
-            "--duplicates/--stationary",
-            file=sys.stderr,
-        )
-        return 2
-
-    try:
-        source = _load_source(args) if args.source else args.csv
+        ds = _load_source(args) if args.source else load_csv(args.csv)
     except SourceUnavailable as exc:
         print(f"error: live source unavailable — {exc}", file=sys.stderr)
         return 3
+    except OSError as exc:
+        print(f"error: cannot read CSV — {exc}", file=sys.stderr)
+        return 2
 
-    report = SelfAuditingDatasetScanner(checks).scan(source)
+    if args.infer:
+        checks = infer_checks(ds)
+        if not args.quiet:
+            print(f"inferred {len(checks)} checks: {', '.join(c.name for c in checks)}\n")
+    else:
+        try:
+            checks = _checks_from_args(args)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if not checks:
+            print(
+                "error: no checks specified — use --infer or "
+                "--range/--monotonic/--missing/--duplicates/--stationary",
+                file=sys.stderr,
+            )
+            return 2
+
+    report = SelfAuditingDatasetScanner(checks).scan(ds)
     if not args.quiet:
         print(report.log.render())
     if args.json:
         report.log.save(args.json)
+    if args.html:
+        report.log.save_html(args.html)
     verdict = "TRUSTED" if report.trusted else "UNTRUSTED"
     print(f"verdict: {verdict}  (failed: {report.failed_checks or 'none'})")
     return 0 if report.trusted else 1

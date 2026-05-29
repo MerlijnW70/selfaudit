@@ -21,3 +21,7 @@ env/
 # Secrets / local config — NEVER commit the real .env (keep .env.example tracked)
 .env
 .env.local
+
+# Scratch: fetched third-party data & generated HTML reports
+titanic.csv
+*_report.html

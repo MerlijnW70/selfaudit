@@ -150,6 +150,34 @@ def test_run_rejects_both_csv_and_source(tmp_path, capsys) -> None:
     assert "not both" in capsys.readouterr().err
 
 
+def test_run_infer_flags_planted_outlier(tmp_path, capsys) -> None:
+    body = "ts,temperature\n" + "".join(f"{i},{20 + i % 5}\n" for i in range(60))
+    body = body.replace("30,2", "30,9000", 1)  # plant an outlier at ts=30
+    csv = _write_csv(tmp_path, body)
+    code = run([csv, "--infer", "--quiet"])
+    assert code == 1
+    assert "UNTRUSTED" in capsys.readouterr().out
+
+
+def test_run_infer_announces_inferred_checks(tmp_path, capsys) -> None:
+    csv = _write_csv(tmp_path, "ts,temperature\n0,20\n1,21\n2,22\n")
+    run([csv, "--infer"])
+    assert "inferred" in capsys.readouterr().out
+
+
+def test_run_writes_html_report(tmp_path) -> None:
+    csv = _write_csv(tmp_path, _DIRTY)
+    out_html = tmp_path / "report.html"
+    run([csv, "--range", "temperature:-50:150", "--html", str(out_html), "--quiet"])
+    assert out_html.exists()
+    assert out_html.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
+def test_run_bad_csv_path_is_error(capsys) -> None:
+    assert run(["/no/such/file-12345.csv", "--infer"]) == 2
+    assert "cannot read CSV" in capsys.readouterr().err
+
+
 def test_run_all_check_kinds_together(tmp_path, capsys) -> None:
     csv = _write_csv(tmp_path, _CLEAN)
     code = run(

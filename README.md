@@ -72,6 +72,7 @@ python -m selfaudit.noisedemo    # stochastic noise: Monte-Carlo over the re-tes
 python -m selfaudit.llmdemo      # LLM validation: 4 scripted scenarios (+ live run if a key is set)
 python -m selfaudit.datasetdemo  # dataset scan: planted faulty-sensor window, writes dataset_audit_log.json
 python -m selfaudit.scan FILE.csv --range temperature:-50:150 --monotonic timestamp  # scan a real CSV
+python -m selfaudit.scan FILE.csv --infer --html report.html   # zero-config: auto-propose rules + HTML report
 python -m selfaudit.livedemo     # fetch & scan FREE live data (Open-Meteo + USGS); no API key
 pytest -q                        # fast test suite (~15s; part of the anvil gate)
 pytest --cov=selfaudit           # full check: coverage, enforces the 95% floor (pre-push / CI)
@@ -185,6 +186,19 @@ it is — then writes it all to an audit log. The demo plants a stuck-high senso
 fault in rows 420–479 and the segment-analysis re-test pins it back to exactly
 that window. Checks are pluggable (the `Check` interface), so business or
 scientific rules drop straight in.
+
+**Zero-config vetting.** Point `--infer` at any dataset and it proposes a rule
+set from the data itself (missing-value budget, duplicate rows, IQR outliers and
+regime shifts per numeric column, monotonic checks for index/timestamp columns)
+— no rules to hand-write. `--html` writes a shareable, colour-coded trust report.
+The verdict means "needs review", not "broken": an outlier flag surfaces extreme
+values for a human to judge, with the exact rows and evidence.
+
+Run live against the classic Titanic dataset, zero config, it flags the genuine
+issues — missing `Age`/`Cabin` values and the extreme `Fare` tail — while *not*
+crying wolf on the `PassengerId` index or zero-inflated count columns (false
+positives that an earlier version produced and that were fixed by testing on real
+data).
 
 A command-line front end scans a real CSV and exits `0` (trusted) or `1`
 (untrusted), so it drops straight into a CI pipeline:

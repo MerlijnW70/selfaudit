@@ -100,6 +100,83 @@ class AuditLog:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(self.to_json())
 
+    def _verdict(self) -> tuple[str, bool]:
+        """A human label for the final status and whether it is a 'good' outcome."""
+        good = self.final_status in ("solved", "fitted", "validated", "trusted")
+        labels = {
+            "solved": "SOLVED",
+            "unsolved": "UNSOLVED",
+            "fitted": "MODEL FOUND",
+            "anomaly": "ANOMALY / DISCOVERY",
+            "noise": "NO DISCOVERY (noise)",
+            "validated": "VALIDATED",
+            "unvalidated": "NOT VALIDATED",
+            "trusted": "TRUSTED",
+            "untrusted": "UNTRUSTED",
+            "pending": "PENDING",
+        }
+        return labels.get(self.final_status, self.final_status.upper()), good
+
+    def to_html(self) -> str:
+        """A self-contained, shareable HTML report (inline CSS, no dependencies)."""
+        from html import escape
+
+        verdict, good = self._verdict()
+        accent = "#1a7f37" if good else "#cf222e"
+        parts: list[str] = []
+        parts.append("<!doctype html><html lang='en'><head><meta charset='utf-8'>")
+        parts.append(f"<title>Self-Audit · {escape(self.problem)}</title>")
+        parts.append(
+            "<style>"
+            "body{font:14px/1.5 system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#f6f8fa;"
+            "color:#1f2328}.wrap{max-width:920px;margin:0 auto;padding:24px}"
+            "h1{font-size:18px;margin:0 0 4px}.sub{color:#656d76;margin:0 0 16px}"
+            f".verdict{{display:inline-block;padding:6px 14px;border-radius:6px;color:#fff;"
+            f"font-weight:700;background:{accent};margin-bottom:20px}}"
+            ".chk{background:#fff;border:1px solid #d0d7de;border-radius:8px;margin:10px 0;"
+            "padding:12px 16px}.chk h2{font-size:15px;margin:0 0 6px}"
+            ".ok{color:#1a7f37}.bad{color:#cf222e}.pill{font-size:12px;font-weight:700;"
+            "padding:2px 8px;border-radius:10px;margin-left:8px}"
+            ".pill.ok{background:#dafbe1}.pill.bad{background:#ffebe9}"
+            ".meta{color:#656d76;font-size:13px}.rt{margin:8px 0 0 0;padding:8px 12px;"
+            "background:#f6f8fa;border-left:3px solid #d0d7de;border-radius:4px}"
+            "code{background:#eff1f3;padding:1px 5px;border-radius:4px}"
+            ".concl{margin-top:8px}</style></head><body><div class='wrap'>"
+        )
+        parts.append(f"<h1>Self-Audit · {escape(self.problem)}</h1>")
+        parts.append(f"<p class='sub'>{escape(self.description)}</p>")
+        parts.append(f"<div class='verdict'>{escape(verdict)}</div>")
+        if self.conclusion:
+            parts.append(f"<p class='meta'>{escape(self.conclusion)}</p>")
+        for a in self.attempts:
+            passed = a.classification == "expected" or a.decision == "accept"
+            cls = "ok" if passed else "bad"
+            pill = "PASS" if passed else a.decision.upper()
+            parts.append("<div class='chk'>")
+            parts.append(
+                f"<h2>{escape(a.strategy)} <span class='pill {cls}'>{escape(pill)}</span></h2>"
+            )
+            for c in a.checks:
+                mark = "ok" if c.satisfied else "bad"
+                parts.append(
+                    f"<div class='meta'><span class='{mark}'>"
+                    f"{'✓' if c.satisfied else '✗'}</span> "
+                    f"<code>{escape(c.name)}</code> — {escape(c.detail)}</div>"
+                )
+            for r in a.retests:
+                parts.append(f"<div class='rt'><b>re-test:</b> {escape(r.name)}")
+                parts.append(f"<div class='concl'>{escape(r.conclusion)}</div></div>")
+            parts.append(
+                f"<div class='meta'>decision: <b>{escape(a.decision)}</b> — {escape(a.notes)}</div>"
+            )
+            parts.append("</div>")
+        parts.append("</div></body></html>")
+        return "".join(parts)
+
+    def save_html(self, path: str) -> None:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(self.to_html())
+
     def render(self) -> str:
         """A human-readable audit report."""
         lines: list[str] = []

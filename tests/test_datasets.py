@@ -9,6 +9,8 @@ from selfaudit.datasets import (
     Dataset,
     distribution_stationary,
     duplicate_rate_below,
+    infer_checks,
+    iqr_outliers,
     load_csv,
     no_missing_required,
     timestamps_monotonic,
@@ -106,6 +108,67 @@ def test_distribution_stationary_flags_shift_and_skips_tiny() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Outlier detection + rule inference
+# --------------------------------------------------------------------------- #
+
+
+def test_iqr_outliers_flags_extreme_value() -> None:
+    temps = [str(20 + (i % 3)) for i in range(30)]
+    temps[15] = "9999"  # blatant outlier
+    res = iqr_outliers("temperature").run(_ds(temps))
+    assert not res.ok
+    assert 15 in res.bad_rows
+
+
+def test_iqr_outliers_clean_passes_and_tiny_skipped() -> None:
+    assert iqr_outliers("temperature").run(_ds([str(20 + (i % 4)) for i in range(40)])).ok
+    assert iqr_outliers("temperature").run(_ds(["1", "2"])).ok  # too few -> trivially ok
+
+
+def test_iqr_outliers_zero_spread_is_not_flagged() -> None:
+    # Zero-inflated column (>75% zeros): Q1=Q3=0 -> IQR 0 -> must NOT flag every
+    # non-zero value (the Titanic 'Parch' false-positive).
+    vals = ["0"] * 38 + ["5"] * 2
+    res = iqr_outliers("temperature").run(_ds(vals))
+    assert res.ok
+    assert "zero IQR" in res.detail
+
+
+def test_infer_skips_stationarity_on_an_index_column() -> None:
+    # A sequential index (1..N) must get monotonic, NOT stationary (the Titanic
+    # 'PassengerId' false-positive: a trending mean on an index is expected).
+    rows = [{"id": str(i + 1)} for i in range(40)]
+    names = [c.name for c in infer_checks(Dataset(["id"], rows, "idx"))]
+    assert "monotonic[id]" in names
+    assert "stationary[id]" not in names
+
+
+def test_infer_checks_proposes_sensible_rules() -> None:
+    # A numeric, ascending, high-cardinality column -> outliers + stationary + monotonic.
+    rows = [{"ts": str(i), "temp": str(20 + (i % 7)), "tag": "A"} for i in range(40)]
+    ds = Dataset(["ts", "temp", "tag"], rows, "infer")
+    names = [c.name for c in infer_checks(ds)]
+    assert "missing_required" in names
+    assert "duplicate_rate" in names
+    assert "outliers[temp]" in names
+    assert "monotonic[ts]" in names  # ascending sequence detected
+    assert "monotonic[temp]" not in names  # wobbly column is not treated as ordered
+    # 'tag' is categorical -> no numeric checks proposed for it
+    assert not any("tag" in n for n in names)
+
+
+def test_infer_checks_flags_a_planted_outlier_end_to_end() -> None:
+    temps = [str(20 + (i % 5)) for i in range(60)]
+    temps[30] = "5000"
+    rows = [{"ts": str(i), "temperature": temps[i]} for i in range(60)]
+    report = SelfAuditingDatasetScanner(infer_checks(Dataset(["ts", "temperature"], rows))).scan(
+        Dataset(["ts", "temperature"], rows)
+    )
+    assert not report.trusted
+    assert any("outliers[temperature]" == c for c in report.failed_checks)
+
+
+# --------------------------------------------------------------------------- #
 # Segment-analysis re-test classification
 # --------------------------------------------------------------------------- #
 
@@ -180,6 +243,31 @@ def test_scan_log_is_json_serializable_and_renders() -> None:
     parsed = json.loads(report.log.to_json())
     assert parsed["final_status"] == "untrusted"
     assert "UNTRUSTED" in report.log.render()
+
+
+def test_html_report_renders_verdict_and_checks(tmp_path) -> None:
+    report = SelfAuditingDatasetScanner([values_in_range("temperature", -50, 150)]).scan(
+        _ds(["20", "999", "21"])
+    )
+    html = report.log.to_html()
+    assert "<!doctype html>" in html
+    assert "UNTRUSTED" in html
+    assert "range[temperature]" in html
+    assert "<script" not in html.lower()  # no injected scripts
+    out = tmp_path / "report.html"
+    report.log.save_html(str(out))
+    assert out.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
+def test_html_report_escapes_content() -> None:
+    # A column name with HTML metacharacters must be escaped, not injected.
+    rows = [{"<x>": "1"}, {"<x>": "1"}]
+    report = SelfAuditingDatasetScanner([duplicate_rate_below()]).scan(
+        Dataset(["<x>"], rows, "<b>evil</b>")
+    )
+    html = report.log.to_html()
+    assert "<b>evil</b>" not in html
+    assert "&lt;b&gt;evil&lt;/b&gt;" in html
 
 
 def test_dataset_demo_runs_and_writes_log(tmp_path, monkeypatch, capsys) -> None:

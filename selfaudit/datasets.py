@@ -207,3 +207,94 @@ def distribution_stationary(field_name: str, *, max_shift: float = 3.0) -> Check
         )
 
     return Check(f"stationary[{field_name}]", run)
+
+
+def _percentile(sorted_vals: list[float], q: float) -> float:
+    """Linear-interpolated percentile of an already-sorted list (q in [0, 1])."""
+    if not sorted_vals:
+        return 0.0
+    if len(sorted_vals) == 1:
+        return sorted_vals[0]
+    pos = q * (len(sorted_vals) - 1)
+    lo = int(pos)
+    frac = pos - lo
+    if lo + 1 < len(sorted_vals):
+        return sorted_vals[lo] * (1 - frac) + sorted_vals[lo + 1] * frac
+    return sorted_vals[lo]
+
+
+def iqr_outliers(field_name: str, *, k: float = 3.0, max_fraction: float = 0.0) -> Check:
+    """Numeric ``field_name`` must have no values beyond Tukey fences
+    ``[Q1 - k·IQR, Q3 + k·IQR]``.
+
+    Robust and domain-free — the workhorse for vetting data whose valid range you
+    do not know in advance (it learns the bulk and flags what falls far outside).
+    """
+
+    def run(ds: Dataset) -> CheckResult:
+        present = [(i, v) for i, v in ds.numeric_column(field_name) if v is not None]
+        if len(present) < 4:
+            return CheckResult(
+                True, 0.0, max_fraction, f"too few {field_name} values for an outlier test"
+            )
+        nums = sorted(v for _, v in present)
+        q1, q3 = _percentile(nums, 0.25), _percentile(nums, 0.75)
+        iqr = q3 - q1
+        if iqr == 0.0:
+            # No spread in the middle 50% (e.g. a zero-inflated count column):
+            # IQR fences collapse to a point and would flag every deviation. The
+            # outlier test is not meaningful here — report clean rather than noisy.
+            return CheckResult(
+                True, 0.0, max_fraction, f"{field_name} has zero IQR; outlier test not applicable"
+            )
+        lo, hi = q1 - k * iqr, q3 + k * iqr
+        bad = [i for i, v in present if v < lo or v > hi]
+        frac = _fraction(len(bad), ds.n)
+        return CheckResult(
+            ok=frac <= max_fraction,
+            measured=frac,
+            threshold=max_fraction,
+            detail=f"{len(bad)}/{ds.n} {field_name} values beyond {k:g}·IQR fences "
+            f"[{lo:.4g}, {hi:.4g}]",
+            bad_rows=bad,
+        )
+
+    return Check(f"outliers[{field_name}]", run)
+
+
+def _looks_numeric(ds: Dataset, field_name: str) -> list[float]:
+    """Return the parsed values if ``field_name`` is mostly numeric, else ``[]``."""
+    col = ds.numeric_column(field_name)
+    present = [v for _, v in col if v is not None]
+    non_empty = sum(1 for row in ds.rows if (row.get(field_name) or "").strip() != "")
+    if len(present) >= 8 and non_empty > 0 and len(present) >= 0.8 * non_empty:
+        return present
+    return []
+
+
+def infer_checks(ds: Dataset, *, missing_fraction: float = 0.01) -> list[Check]:
+    """Propose a sensible rule set from the data itself — zero configuration.
+
+    Always checks missing-value budget and duplicate rows; for each numeric
+    column with enough distinct values, adds an IQR-outlier and a regime-shift
+    check, plus a monotonic check for columns that look like an ordered sequence
+    (timestamps/ids). Categorical and low-cardinality columns are left alone.
+    """
+    checks: list[Check] = [
+        no_missing_required(ds.columns, max_fraction=missing_fraction),
+        duplicate_rate_below(max_fraction=0.0),
+    ]
+    for col in ds.columns:
+        present = _looks_numeric(ds, col)
+        if not present or len(set(present)) < 5:
+            continue  # non-numeric, too sparse, or low-cardinality (codes/flags)
+        decreases = sum(1 for a, b in zip(present, present[1:], strict=False) if b < a)
+        is_ordered = decreases <= 0.05 * len(present) and present[-1] > present[0]
+        checks.append(iqr_outliers(col, k=3.0))
+        if is_ordered:
+            # An ordered sequence (timestamp/index): a monotonic check is meaningful,
+            # but a stationarity check is not — a trending mean is expected, not an anomaly.
+            checks.append(timestamps_monotonic(col))
+        else:
+            checks.append(distribution_stationary(col, max_shift=3.0))
+    return checks
