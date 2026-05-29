@@ -1,5 +1,9 @@
 # Self-Auditing AI — a self-correcting algorithm
 
+[![CI](https://github.com/MerlijnW70/selfaudit/actions/workflows/ci.yml/badge.svg)](https://github.com/MerlijnW70/selfaudit/actions/workflows/ci.yml)
+
+> **Beta (v0.0.1)** — APIs may still change.
+
 ## Quickstart — vet any dataset in one command
 
 ```bash

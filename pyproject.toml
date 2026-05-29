@@ -1,6 +1,6 @@
 [project]
 name = "selfaudit"
-version = "0.1.0"
+version = "0.0.1"
 description = "Self-Auditing AI: a self-correcting numerical solver with a full audit trail"
 requires-python = ">=3.10"
 license = { text = "MIT" }
