@@ -247,6 +247,29 @@ def json_schema_validator(required: dict[str, type]) -> Validator:
     return validate
 
 
+def exact_field_validator(key: str, expected: object) -> Validator:
+    """Build a validator: the output must parse as a JSON object whose ``key``
+    equals ``expected``. Useful for tasks with one objectively correct answer
+    (e.g. arithmetic) — the validator *computes* the truth, so it cannot drift.
+    """
+
+    def validate(text: str) -> ValidationResult:
+        cleaned = _strip_code_fence(text)
+        try:
+            data = json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError) as exc:
+            return ValidationResult(False, 1, f"not valid JSON: {exc}")
+        if not isinstance(data, dict):
+            return ValidationResult(False, 1, "JSON is not an object")
+        if key not in data:
+            return ValidationResult(False, 1, f"missing key '{key}'")
+        if data[key] != expected:
+            return ValidationResult(False, 1, f"key '{key}' = {data[key]!r}, expected {expected!r}")
+        return ValidationResult(True, 0, f"key '{key}' equals the expected value")
+
+    return validate
+
+
 def default_tiers() -> list[ModelCaller]:
     """The default escalation ladder of real model tiers: haiku -> sonnet -> opus."""
     return [

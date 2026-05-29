@@ -20,6 +20,7 @@ from selfaudit.llm import (
     _resolve_ca_bundle,
     _strip_code_fence,
     enable_os_truststore,
+    exact_field_validator,
     json_schema_validator,
     load_dotenv,
 )
@@ -75,6 +76,18 @@ def test_validator_reports_missing_and_wrong_type() -> None:
 def test_strip_code_fence_plain_passthrough() -> None:
     assert _strip_code_fence("  hello  ") == "hello"
     assert _strip_code_fence("```\nx\n```") == "x"
+
+
+def test_exact_field_validator() -> None:
+    v = exact_field_validator("product", 42)
+    assert v('{"product": 42}').ok
+    assert v('```json\n{"product": 42}\n```').ok  # fence-stripped
+    assert not v("not json").ok
+    assert not v("[1,2]").ok  # not an object
+    assert not v('{"other": 42}').ok  # missing key
+    wrong = v('{"product": 41}')
+    assert not wrong.ok
+    assert "expected 42" in wrong.detail
 
 
 # --------------------------------------------------------------------------- #

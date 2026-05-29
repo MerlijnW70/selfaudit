@@ -14,6 +14,7 @@ from .llm import (
     Task,
     ValidationResult,
     enable_os_truststore,
+    exact_field_validator,
     json_schema_validator,
     load_dotenv,
 )
@@ -53,6 +54,7 @@ __all__ = [
     "ValidationResult",
     "LLMUnavailable",
     "json_schema_validator",
+    "exact_field_validator",
     "load_dotenv",
     "enable_os_truststore",
     "TimeSeries",

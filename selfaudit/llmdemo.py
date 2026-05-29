@@ -20,6 +20,7 @@ from .llm import (
     Task,
     default_tiers,
     enable_os_truststore,
+    exact_field_validator,
     json_schema_validator,
     load_dotenv,
 )
@@ -38,6 +39,23 @@ _BAD_JSON = '{"name": "Ada", "age": "thirty-six"}'  # wrong type + missing key
 
 def _task() -> Task:
     return Task("person-json", _PROMPT, json_schema_validator(_REQUIRED))
+
+
+# A deliberately hard live task: multi-digit multiplication with "JSON only, no
+# prose" suppresses the model's scratch space. The validator computes the truth
+# itself, so it cannot be fooled by a confident-but-wrong answer — in practice
+# every tier tends to miscompute, so the ladder escalates fully and honestly
+# reports `unvalidated` rather than accepting a plausible wrong number. That is
+# the whole point: an objective invariant prevents false positives.
+_A, _B = 739_613, 856_447
+_HARD_PROMPT = (
+    f'Compute {_A} * {_B} exactly. Return ONLY a JSON object {{"product": <integer>}} '
+    f"with the exact integer result. No prose, no markdown, no commas in the number."
+)
+
+
+def _hard_task() -> Task:
+    return Task("hard-arithmetic", _HARD_PROMPT, exact_field_validator("product", _A * _B))
 
 
 def scripted_scenarios() -> list[tuple[str, SelfAuditingValidator]]:
@@ -105,8 +123,10 @@ def main() -> None:
             return
         if enable_os_truststore():
             print("(TLS verification routed through the OS trust store via truststore.)")
-        log = _run(SelfAuditingValidator(default_tiers()), task)
-        print(log.render())
+        print("\n-- live task A: produce valid person JSON --")
+        print(_run(SelfAuditingValidator(default_tiers()), task).render())
+        print("\n-- live task B: exact multi-digit arithmetic (stresses weaker tiers) --")
+        print(_run(SelfAuditingValidator(default_tiers()), _hard_task()).render())
     else:
         print("\n(no ANTHROPIC_API_KEY set — skipping the live run.)")
 
