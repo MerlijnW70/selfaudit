@@ -20,9 +20,13 @@ import csv
 import io
 import json
 import math
-from collections.abc import Callable, Iterable
+import random
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from typing import TypeVar
+
+_T = TypeVar("_T")
 
 
 @dataclass
@@ -213,6 +217,55 @@ def load_csv(path: str, *, name: str = "") -> Dataset:
     """Load a CSV/TSV file into a :class:`Dataset` (delimiter + encoding detected)."""
     with open(path, "rb") as fh:
         return parse_csv(_decode(fh.read()), name or path)
+
+
+def _reservoir(items: Iterator[_T], n: int, rng: random.Random) -> tuple[list[_T], int]:
+    """Reservoir-sample up to ``n`` items from a stream; returns (sample, total seen)."""
+    sample: list[_T] = []
+    total = 0
+    for item in items:
+        total += 1
+        if len(sample) < n:
+            sample.append(item)
+        else:
+            j = rng.randrange(total)
+            if j < n:
+                sample[j] = item
+    return sample, total
+
+
+def sample_csv_file(path: str, n: int, *, name: str = "", seed: int = 0) -> Dataset:
+    """Stream a (possibly multi-GB) CSV and keep a random ``n``-row sample — bounded
+    memory regardless of file size (a header row is assumed)."""
+    rng = random.Random(seed)
+    with open(path, encoding="utf-8", errors="replace", newline="") as fh:
+        head = fh.read(8192)
+        fh.seek(0)
+        try:
+            delimiter = csv.Sniffer().sniff(head, delimiters=",;\t|").delimiter
+        except csv.Error:
+            delimiter = ","
+        reader = csv.reader(fh, delimiter=delimiter)
+        try:
+            columns = _unique_columns(next(reader))
+        except StopIteration:
+            return Dataset([], [], name or path)
+        sampled, total = _reservoir(reader, n, rng)
+    rows = [
+        {columns[i]: (r[i] if i < len(r) else "") for i in range(len(columns))} for r in sampled
+    ]
+    label = name or path
+    if total > n:
+        label = f"{label} (sample {len(rows)} of {total})"
+    return Dataset(columns, rows, label)
+
+
+def sample_dataset(ds: Dataset, n: int, *, seed: int = 0) -> Dataset:
+    """Reservoir-sample an already-loaded :class:`Dataset` down to ``n`` rows."""
+    if ds.n <= n:
+        return ds
+    sampled, total = _reservoir(iter(ds.rows), n, random.Random(seed))
+    return Dataset(ds.columns, sampled, f"{ds.name} (sample {len(sampled)} of {total})")
 
 
 @dataclass

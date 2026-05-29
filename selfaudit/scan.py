@@ -35,6 +35,8 @@ from .datasets import (
     load_dataset,
     load_rules,
     no_missing_required,
+    sample_csv_file,
+    sample_dataset,
     svg_chart,
     timestamps_monotonic,
     unique_key,
@@ -221,6 +223,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="write the inferred rules to PATH (edit, then re-run with --rules) and exit",
     )
     p.add_argument(
+        "--sample",
+        type=int,
+        metavar="N",
+        help="scan a random N-row sample (streams huge CSVs in bounded memory)",
+    )
+    p.add_argument(
         "--strict",
         action="store_true",
         help="treat warnings as failures too (exit 1 on REVIEW, not just UNTRUSTED)",
@@ -287,13 +295,22 @@ def run(argv: list[str] | None = None) -> int:
         return 2
 
     # Load the dataset first — inference needs to see the data.
+    local_csv = bool(
+        args.csv
+        and not args.csv.startswith(("http://", "https://"))
+        and not args.csv.lower().endswith((".xlsx", ".xlsm"))
+    )
     try:
-        if args.source:
+        if args.sample and local_csv:
+            ds = sample_csv_file(args.csv, args.sample)  # stream a huge file in bounded memory
+        elif args.source:
             ds = _load_source(args)
         elif args.csv.startswith(("http://", "https://")):
             ds = fetch_csv(args.csv)
         else:
             ds = load_dataset(args.csv)
+        if args.sample and not local_csv:  # already loaded -> sample in memory
+            ds = sample_dataset(ds, args.sample)
     except SourceUnavailable as exc:
         print(f"error: source unavailable — {exc}", file=sys.stderr)
         return 3

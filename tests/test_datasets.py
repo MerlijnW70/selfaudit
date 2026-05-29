@@ -25,6 +25,8 @@ from selfaudit.datasets import (
     parse_csv,
     parse_json,
     parse_text,
+    sample_csv_file,
+    sample_dataset,
     svg_chart,
     timestamps_monotonic,
     unique_key,
@@ -134,6 +136,24 @@ def test_parse_json_bad_shape_raises() -> None:
 def test_parse_text_dispatches_by_content_and_name() -> None:
     assert parse_text('[{"x": 1}]').columns == ["x"]  # content sniff -> JSON
     assert parse_text("x,y\n1,2\n").columns == ["x", "y"]  # -> CSV
+
+
+def test_sample_csv_file_streams_a_subset(tmp_path) -> None:
+    p = tmp_path / "big.csv"
+    p.write_text("id,val\n" + "".join(f"{i},{i * 2}\n" for i in range(1000)), encoding="utf-8")
+    ds = sample_csv_file(str(p), 50, seed=1)
+    assert ds.columns == ["id", "val"]
+    assert ds.n == 50  # bounded to the sample size, not 1000
+    assert "sample 50 of 1000" in ds.name
+    # deterministic for a fixed seed
+    assert [r["id"] for r in ds.rows] == [r["id"] for r in sample_csv_file(str(p), 50, seed=1).rows]
+
+
+def test_sample_dataset_in_memory() -> None:
+    big = Dataset(["x"], [{"x": str(i)} for i in range(500)], "big")
+    assert sample_dataset(big, 20).n == 20
+    small = Dataset(["x"], [{"x": "1"}], "small")
+    assert sample_dataset(small, 20) is small  # already small -> unchanged
 
 
 def test_load_dataset_reads_json_and_xlsx(tmp_path) -> None:
