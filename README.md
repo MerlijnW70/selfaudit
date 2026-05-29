@@ -278,3 +278,5 @@ python -m selfaudit.scan --source crypto --coin bitcoin \
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- CI: exercising the data-trust PR-comment workflow. -->
