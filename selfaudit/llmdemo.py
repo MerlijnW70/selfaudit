@@ -19,7 +19,9 @@ from .llm import (
     ScriptedCaller,
     Task,
     default_tiers,
+    enable_os_truststore,
     json_schema_validator,
+    load_dotenv,
 )
 from .llmauditor import SelfAuditingValidator, ValidationFailed
 
@@ -78,6 +80,9 @@ def _run(validator: SelfAuditingValidator, task: Task) -> AuditLog:
 
 
 def main() -> None:
+    # Load .env (if present) so the live run can read ANTHROPIC_API_KEY /
+    # SSL_CERT_FILE; the file is authoritative over any stale inherited value.
+    load_dotenv(override=True)
     task = _task()
     saved = False
     for title, validator in scripted_scenarios():
@@ -98,6 +103,8 @@ def main() -> None:
         except ImportError:
             print("anthropic SDK not installed; skipping live run.")
             return
+        if enable_os_truststore():
+            print("(TLS verification routed through the OS trust store via truststore.)")
         log = _run(SelfAuditingValidator(default_tiers()), task)
         print(log.render())
     else:

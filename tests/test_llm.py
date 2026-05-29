@@ -8,6 +8,7 @@ with a monkeypatched client — still offline.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -18,7 +19,9 @@ from selfaudit.llm import (
     Task,
     _resolve_ca_bundle,
     _strip_code_fence,
+    enable_os_truststore,
     json_schema_validator,
+    load_dotenv,
 )
 from selfaudit.llmauditor import SelfAuditingValidator, ValidationFailed
 
@@ -216,6 +219,61 @@ def test_anthropic_caller_happy_path_with_fake_client(monkeypatch) -> None:
     monkeypatch.setattr(anthropic, "Anthropic", _FakeClient)
     out = AnthropicCaller("x", "model-id").call("hi")
     assert out == "hello world"  # only text blocks, concatenated
+
+
+def test_load_dotenv_parses_and_respects_override(tmp_path, monkeypatch) -> None:
+    env = tmp_path / ".env"
+    env.write_text(
+        "\n".join(
+            [
+                "# a comment",
+                "",
+                "export QUOTED='hello world'",
+                'PLAIN="bare"',
+                "ANTHROPIC_API_KEY=sk-from-file",
+                "noequalsline",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("QUOTED", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-already-set")
+
+    parsed = load_dotenv(str(env))  # override=False
+    assert parsed["QUOTED"] == "hello world"  # quotes + export stripped
+    assert parsed["PLAIN"] == "bare"
+    assert "noequalsline" not in parsed
+    assert os.environ["QUOTED"] == "hello world"  # newly set
+    assert os.environ["ANTHROPIC_API_KEY"] == "sk-already-set"  # not overridden
+
+    load_dotenv(str(env), override=True)
+    assert os.environ["ANTHROPIC_API_KEY"] == "sk-from-file"  # now overridden
+
+
+def test_load_dotenv_missing_file_is_noop() -> None:
+    assert load_dotenv("does-not-exist-12345.env") == {}
+
+
+def test_enable_os_truststore_missing_returns_false(monkeypatch) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "truststore":
+            raise ImportError("simulated: truststore not installed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    assert enable_os_truststore() is False
+
+
+def test_enable_os_truststore_injects_when_present(monkeypatch) -> None:
+    truststore = pytest.importorskip("truststore")
+    called: dict[str, bool] = {}
+    monkeypatch.setattr(truststore, "inject_into_ssl", lambda: called.setdefault("done", True))
+    assert enable_os_truststore() is True
+    assert called["done"] is True
 
 
 def test_resolve_ca_bundle_precedence(monkeypatch) -> None:

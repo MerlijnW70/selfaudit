@@ -13,7 +13,9 @@ from .llm import (
     ScriptedCaller,
     Task,
     ValidationResult,
+    enable_os_truststore,
     json_schema_validator,
+    load_dotenv,
 )
 from .llmauditor import SelfAuditingValidator, Validation, ValidationFailed
 from .signals import TimeSeries
@@ -51,6 +53,8 @@ __all__ = [
     "ValidationResult",
     "LLMUnavailable",
     "json_schema_validator",
+    "load_dotenv",
+    "enable_os_truststore",
     "TimeSeries",
     "Method",
     "NumericalFailure",

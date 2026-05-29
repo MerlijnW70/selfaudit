@@ -17,3 +17,7 @@ htmlcov/
 .venv/
 venv/
 env/
+
+# Secrets / local config — NEVER commit the real .env (keep .env.example tracked)
+.env
+.env.local

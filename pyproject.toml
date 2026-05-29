@@ -7,7 +7,9 @@ license = { text = "MIT" }
 dependencies = ["scipy>=1.10"]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "mypy"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "truststore"]
+# 'truststore' routes TLS verification through the OS trust store — needed for the
+# live LLM run behind a TLS-intercepting corporate proxy (see selfaudit/llm.py).
 
 [build-system]
 requires = ["setuptools>=61"]

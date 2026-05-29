@@ -28,6 +28,40 @@ SONNET = "claude-sonnet-4-6"
 OPUS = "claude-opus-4-8"
 
 
+def load_dotenv(path: str = ".env", *, override: bool = False) -> dict[str, str]:
+    """Load ``KEY=VALUE`` pairs from a ``.env`` file into ``os.environ``.
+
+    Blank lines and ``#`` comments are ignored; an optional ``export`` prefix and
+    surrounding quotes around the value are stripped. Existing environment
+    variables are left untouched unless ``override`` is true. A missing file is a
+    no-op. Returns the parsed pairs (also when nothing was applied to the env).
+
+    Pure stdlib — no python-dotenv dependency.
+    """
+    parsed: dict[str, str] = {}
+    if not os.path.exists(path):
+        return parsed
+    with open(path, encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export ") :].lstrip()
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            if not key:
+                continue
+            parsed[key] = value
+            if override or key not in os.environ:
+                os.environ[key] = value
+    return parsed
+
+
 @dataclass
 class ValidationResult:
     """Outcome of checking one model output against a :class:`Task`'s validator."""
@@ -60,6 +94,23 @@ class ModelCaller(Protocol):
 
 class LLMUnavailable(Exception):
     """A real model tier cannot run (no SDK / no API key / transport error)."""
+
+
+def enable_os_truststore() -> bool:
+    """Route Python's TLS verification through the operating system's trust store
+    (via the optional ``truststore`` package). Returns ``True`` when enabled.
+
+    This is the secure fix for TLS-intercepting corporate proxies: the OS often
+    trusts the proxy's re-signing CA even when Python's bundled OpenSSL trust does
+    not. Verification stays **on** — it is delegated to the platform, not
+    disabled. A no-op returning ``False`` when ``truststore`` is not installed.
+    """
+    try:
+        import truststore
+    except ImportError:
+        return False
+    truststore.inject_into_ssl()
+    return True
 
 
 def _resolve_ca_bundle(explicit: str | None) -> str | None:
