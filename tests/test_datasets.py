@@ -15,6 +15,7 @@ from selfaudit.datasets import (
     distribution_stationary,
     dump_rules,
     duplicate_rate_below,
+    humanize_check,
     infer_checks,
     infer_specs,
     iqr_outliers,
@@ -107,6 +108,31 @@ def test_parse_csv_drops_all_blank_filler_rows() -> None:
     assert ds.n == 2  # the two all-blank filler rows are gone
     assert ds.rows[0] == {"ts": "2023", "amount": "100"}
     assert ds.rows[1] == {"ts": "2024", "amount": ""}  # partial row kept (missing amount)
+
+
+def test_humanize_check_gives_plain_titles() -> None:
+    assert humanize_check("missing_required") == "Missing values"
+    assert humanize_check("duplicate_rate") == "Duplicate rows"
+    assert humanize_check("outliers[order_amount]") == "Unusual order_amount values"
+    assert humanize_check("stationary[price]") == "price drifts over time"
+    assert humanize_check("type[age=int]") == "age has the wrong type"  # field stripped of =type
+    assert humanize_check("something_unmapped") == "something_unmapped"  # falls back to code name
+
+
+def test_report_reads_in_plain_english_no_jargon() -> None:
+    # A user-facing report must not leak engineer/statistician notation.
+    ds = parse_csv(
+        "amount\n" + "".join(f"{v}\n" for v in [40, 45, 50, 48, 52, 47, 99999, 41, 49, 46])
+    )
+    report = SelfAuditingDatasetScanner(infer_checks(ds)).scan(ds)
+    html = report.log.to_html()
+    assert "class='plain'" in html  # the plain one-line summary is present
+    assert "Unusual amount values" in html  # humanized check title
+    assert "IQR fences" not in html  # de-jargoned
+    assert "σ" not in html  # de-jargoned
+    import re
+
+    assert not re.search(r"\de[+-]\d", html)  # no scientific notation like 1.67e+04
 
 
 def test_parse_csv_headerless_numeric() -> None:

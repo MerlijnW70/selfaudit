@@ -103,6 +103,43 @@ def _unique_columns(raw: list[str]) -> list[str]:
     return out
 
 
+def _num(x: float) -> str:
+    """Format a number for a human reader: thousands separators, no scientific
+    notation, trailing zeros trimmed (16700.0 -> '16,700', 0.63 -> '0.63').
+    Engineer-facing precision still lives in the audit trail's measured/threshold."""
+    if not math.isfinite(x):
+        return str(x)
+    if abs(x) >= 100:
+        return f"{x:,.0f}"
+    return f"{x:,.4f}".rstrip("0").rstrip(".") or "0"
+
+
+_CHECK_TITLES = {
+    "missing_required": "Missing values",
+    "duplicate_rate": "Duplicate rows",
+    "range": "{field} out of range",
+    "monotonic": "{field} out of order",
+    "stationary": "{field} drifts over time",
+    "unique": "Duplicate {field} values",
+    "type": "{field} has the wrong type",
+    "allowed": "Unexpected {field} values",
+    "outliers": "Unusual {field} values",
+}
+
+
+def humanize_check(name: str) -> str:
+    """A plain-English title for a check's code name, e.g. ``outliers[order_amount]``
+    -> ``Unusual order_amount values``. The code name itself stays in the audit
+    trail; this is what a non-technical reader sees as the heading in the report."""
+    head, sep, rest = name.partition("[")
+    field = rest[:-1] if sep and rest.endswith("]") else ""
+    field = field.split("=")[0]  # type[col=int] -> col
+    template = _CHECK_TITLES.get(head)
+    if template is None:
+        return name
+    return template.format(field=field) if field else template
+
+
 def _has_content(row: list[str]) -> bool:
     """True if a parsed row carries any data. Drops both empty lines and the
     all-comma filler rows (``,,,`` -> ``['', '', '']``) that exported CSVs often
@@ -319,7 +356,7 @@ def values_in_range(
             ok=frac <= max_fraction,
             measured=frac,
             threshold=max_fraction,
-            detail=f"{len(bad)}/{ds.n} rows have {field_name} outside [{lo:g}, {hi:g}]",
+            detail=f"{len(bad)}/{ds.n} rows have {field_name} outside [{_num(lo)}, {_num(hi)}]",
             bad_rows=bad,
         )
 
@@ -449,7 +486,8 @@ def distribution_stationary(
             measured=shift,
             threshold=max_shift,
             detail=(
-                f"{field_name} mean shifts {shift:.2f}σ between halves (1st={m1:.3g}, 2nd={m2:.3g})"
+                f"{field_name} average moves from {_num(m1)} to {_num(m2)} "
+                f"between the first and second half of the data"
             ),
             bad_rows=bad,
         )
@@ -624,8 +662,8 @@ def iqr_outliers(
             ok=frac <= max_fraction,
             measured=frac,
             threshold=max_fraction,
-            detail=f"{len(bad)}/{ds.n} {field_name} values beyond {k:g}·IQR fences "
-            f"[{lo:.4g}, {hi:.4g}]",
+            detail=f"{len(bad)}/{ds.n} {field_name} values fall outside the normal range "
+            f"[{_num(lo)}, {_num(hi)}]",
             bad_rows=bad,
         )
 
@@ -816,7 +854,7 @@ def svg_chart(ds: Dataset, *, width: int = 860, height: int = 220, max_series: i
         parts.append(f"<polyline fill='none' stroke='{color}' stroke-width='2' points='{pts}'/>")
         legend.append(
             f"<span style='color:{color}'>●</span> {escape(col)} "
-            f"<span class='muted'>[{lo:.4g} – {hi:.4g}, n={n}]</span>"
+            f"<span class='muted'>[{_num(lo)} – {_num(hi)}, n={n}]</span>"
         )
     parts.append("</svg>")
     return "".join(parts) + f"<div class='legend'>{' &nbsp; '.join(legend)}</div>"

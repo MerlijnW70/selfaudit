@@ -54,6 +54,11 @@ class ReTest:
     conclusion: str
 
 
+def _plural(n: int, noun: str) -> str:
+    """``1 problem`` / ``2 problems`` — count with a correctly pluralized noun."""
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
 @dataclass
 class Attempt:
     """One attempt by one strategy, including its re-tests and the decision taken."""
@@ -72,6 +77,7 @@ class Attempt:
     params: dict[str, Any] | None = None  # fitted model parameters (for model fitting)
     rows: list[int] = field(default_factory=list)  # offending row indices (dataset checks)
     row_preview: list[dict[str, Any]] = field(default_factory=list)  # sample of offending rows
+    title: str = ""  # optional plain-English heading for reports (falls back to strategy)
 
 
 @dataclass
@@ -166,6 +172,7 @@ class AuditLog:
             f".verdict{{display:inline-block;padding:8px 18px;border-radius:8px;color:#fff;"
             f"font-weight:800;font-size:16px;letter-spacing:.3px;background:{accent}}}"
             ".counts{margin:14px 0 6px}.concl{color:#424a53;margin:6px 0 18px}"
+            ".plain{font-size:15px;font-weight:600;color:#1f2328;margin:12px 0 2px}"
             ".chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;"
             "border-radius:999px;margin-right:6px}"
             ".chip.pass{background:#dafbe1;color:#1a7f37}.chip.warn{background:#fff1cc;color:#9a6700}"
@@ -196,6 +203,18 @@ class AuditLog:
         parts.append(f"<p class='sub'>{escape(self.description)}</p>")
         parts.append(f"<div class='verdict'>{escape(verdict)}</div>")
         parts.append(f"<div class='counts'>{summary}</div>")
+        n_fail, n_warn = counts.get("FAIL", 0), counts.get("WARN", 0)
+        if n_fail:
+            plain = (
+                f"We found {_plural(n_fail, 'problem')}"
+                + (f" and {_plural(n_warn, 'warning')}" if n_warn else "")
+                + " — don't trust this data until they're resolved."
+            )
+        elif n_warn:
+            plain = f"{_plural(n_warn, 'warning')} to review — no outright failures."
+        else:
+            plain = f"No problems found — all {_plural(len(self.attempts), 'check')} passed."
+        parts.append(f"<p class='plain'>{escape(plain)}</p>")
         if self.conclusion:
             parts.append(f"<p class='concl'>{escape(self.conclusion)}</p>")
         if chart:
@@ -235,7 +254,7 @@ class AuditLog:
                 cell += f"<div class='notes'>{escape(a.notes)}</div>"
             parts.append(
                 f"<tr><td class='idx'>{a.index}</td>"
-                f"<td class='name'>{escape(a.strategy)}</td>"
+                f"<td class='name'>{escape(a.title or a.strategy)}</td>"
                 f"<td><span class='chip {klass}'>{escape(label)}</span></td>"
                 f"<td>{cell}</td></tr>"
             )

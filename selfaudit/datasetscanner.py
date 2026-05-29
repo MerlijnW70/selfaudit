@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .audit import Attempt, AuditLog, ExpectationCheck, ReTest
-from .datasets import Check, CheckResult, Dataset, load_csv
+from .datasets import Check, CheckResult, Dataset, humanize_check, load_csv
 
 _ROWS_IN_AUDIT = 1000  # cap offending-row indices stored per check in the audit log
 _PREVIEW_ROWS = 5  # sample of actual offending rows embedded in the report
@@ -137,6 +137,7 @@ class SelfAuditingDatasetScanner:
                         [],
                         "accept",
                         "rule satisfied",
+                        title=humanize_check(check.name),
                     )
                 )
                 continue
@@ -163,17 +164,20 @@ class SelfAuditingDatasetScanner:
                     f"{_row_span(result.bad_rows)}; segment-analysed",
                     rows=result.bad_rows[:_ROWS_IN_AUDIT],
                     row_preview=[ds.rows[i] for i in result.bad_rows[:_PREVIEW_ROWS]],
+                    title=humanize_check(check.name),
                 )
             )
 
+        fail_titles = [humanize_check(n) for n in failures]
+        warn_titles = [humanize_check(n) for n in warnings]
         if failures:
             status = "untrusted"
-            conclusion = "DO NOT TRUST as-is — failed checks: " + ", ".join(failures)
+            conclusion = "DO NOT TRUST as-is — failed checks: " + ", ".join(fail_titles)
             if warnings:
-                conclusion += "; warnings: " + ", ".join(warnings)
+                conclusion += "; warnings: " + ", ".join(warn_titles)
         elif warnings:
             status = "review"
-            conclusion = "NEEDS REVIEW — warnings (no hard failures): " + ", ".join(warnings)
+            conclusion = "NEEDS REVIEW — warnings (no hard failures): " + ", ".join(warn_titles)
         else:
             status = "trusted"
             conclusion = "all checks passed — dataset satisfies every stated rule"
