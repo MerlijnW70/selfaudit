@@ -1,0 +1,91 @@
+{
+  "problem": "person-json",
+  "tolerance": 0.0,
+  "description": "produce output with 0 validator violations",
+  "attempts": [
+    {
+      "index": 1,
+      "strategy": "haiku",
+      "inputs": {
+        "prompt": "Return ONLY a JSON object with keys 'name' (string), 'age' (integer) and 'email\u2026"
+      },
+      "outcome": "invalid",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "output_valid",
+          "measured": 2.0,
+          "threshold": 0.0,
+          "satisfied": false,
+          "detail": "key 'age' should be int, got str; missing key 'email'"
+        }
+      ],
+      "classification": "unexpected",
+      "retests": [
+        {
+          "name": "reproduce_under_retry",
+          "description": "retry the same tier once and re-validate",
+          "reproduced_anomaly": true,
+          "checks": [
+            {
+              "name": "output_valid",
+              "measured": 2.0,
+              "threshold": 0.0,
+              "satisfied": false,
+              "detail": "key 'age' should be int, got str; missing key 'email'"
+            }
+          ],
+          "conclusion": "retry also failed validation: deterministic deficiency of this tier \u2014 escalate"
+        }
+      ],
+      "decision": "escalate",
+      "notes": "validation failed (key 'age' should be int, got str; missing key 'email'); escalated",
+      "params": null
+    },
+    {
+      "index": 2,
+      "strategy": "sonnet",
+      "inputs": {
+        "prompt": "Return ONLY a JSON object with keys 'name' (string), 'age' (integer) and 'email\u2026"
+      },
+      "outcome": "validated",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "output_valid",
+          "measured": 0.0,
+          "threshold": 0.0,
+          "satisfied": true,
+          "detail": "valid JSON object with keys: name, age, email"
+        }
+      ],
+      "classification": "expected",
+      "retests": [
+        {
+          "name": "corroborate_output",
+          "description": "re-call the same tier and re-validate the output",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "output_valid",
+              "measured": 0.0,
+              "threshold": 0.0,
+              "satisfied": true,
+              "detail": "valid JSON object with keys: name, age, email"
+            }
+          ],
+          "conclusion": "re-call produced valid output again: the result is reproducible"
+        }
+      ],
+      "decision": "accept",
+      "notes": "output validated; '{\"name\": \"Ada\", \"age\": 36, \"email\": \"ada@example.com\"}'",
+      "params": null
+    }
+  ],
+  "final_status": "validated",
+  "final_root": null,
+  "winning_strategy": "sonnet",
+  "conclusion": ""
+}

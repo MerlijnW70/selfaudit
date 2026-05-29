@@ -130,6 +130,8 @@ class AuditLog:
             "fitted": "model found",
             "anomaly": "ANOMALY / DISCOVERY",
             "noise": "NO DISCOVERY (noise)",
+            "validated": "output validated",
+            "unvalidated": "NOT validated — all model tiers exhausted",
             "pending": "pending",
         }
         lines.append("")

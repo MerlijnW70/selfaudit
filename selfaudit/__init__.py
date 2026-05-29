@@ -6,6 +6,16 @@ from .audit import Attempt, AuditLog, ExpectationCheck, ReTest
 from .auditor import SelfAuditingSolver, Solution, SolveFailed
 from .diagnostician import AnomalyDetected, FitDiagnosis, SelfAuditingFitter
 from .fitting import FitResult, Model
+from .llm import (
+    AnthropicCaller,
+    LLMUnavailable,
+    ModelCaller,
+    ScriptedCaller,
+    Task,
+    ValidationResult,
+    json_schema_validator,
+)
+from .llmauditor import SelfAuditingValidator, Validation, ValidationFailed
 from .signals import TimeSeries
 from .solver import (
     Method,
@@ -31,6 +41,16 @@ __all__ = [
     "SelfAuditingFitter",
     "FitResult",
     "Model",
+    "SelfAuditingValidator",
+    "Validation",
+    "ValidationFailed",
+    "AnthropicCaller",
+    "ScriptedCaller",
+    "ModelCaller",
+    "Task",
+    "ValidationResult",
+    "LLMUnavailable",
+    "json_schema_validator",
     "TimeSeries",
     "Method",
     "NumericalFailure",

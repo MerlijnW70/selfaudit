@@ -38,6 +38,13 @@ Application 2 — anomaly detection in sensor data (physics/engineering):
 - `selfaudit/sensordemo.py` — demo runner that produces `sensor_audit_log.json`.
 - `tests/test_fitting.py` — pytest suite for the anomaly detection.
 
+Application 3 — LLM output validation:
+- `selfaudit/llm.py` — pluggable model tiers (`AnthropicCaller` / `ScriptedCaller`
+  behind the `ModelCaller` interface) + a pure-stdlib JSON-schema validator.
+- `selfaudit/llmauditor.py` — the Self-Auditing validator (`SelfAuditingValidator`).
+- `selfaudit/llmdemo.py` — demo runner that produces `llm_audit_log.json`.
+- `tests/test_llm.py` — pytest suite (deterministic; no API key needed).
+
 ## Requirements
 
 - Python ≥ 3.10
@@ -53,6 +60,7 @@ pip install -e ".[dev]"          # installs scipy + dev gate tools (pytest, cov,
 python -m selfaudit              # root finder: 6 scenarios, writes audit_log.json
 python -m selfaudit.sensordemo   # sensor anomaly: 5 scenarios, writes sensor_audit_log.json
 python -m selfaudit.noisedemo    # stochastic noise: Monte-Carlo over the re-test
+python -m selfaudit.llmdemo      # LLM validation: 4 scripted scenarios (+ live run if a key is set)
 pytest -q                        # test suite
 pytest --cov=selfaudit -q        # coverage (gate floor: 95%)
 ruff check . && ruff format --check . && mypy .   # anvil gates
@@ -109,6 +117,32 @@ The whiteness test (structured vs. white residual) is the main discriminator;
 the bootstrap only runs when the residual is white-ish (possibly noise). Pure
 noise (`pure_noise_signal`) therefore always yields the noise verdict, never a
 "discovery".
+
+## Application 3: the same loop, applied to LLM output
+
+The third application proves the harness is engine-agnostic: the numerical core
+is swapped for **language-model calls**, and `audit.py` + the controller pattern
+are reused unchanged. The invariant becomes a checkable validator on the output
+(here: "parses as a JSON object with the required keys and types"), and the
+escalation ladder becomes a sequence of model tiers.
+
+| Mapping | root finder | LLM validation |
+| --- | --- | --- |
+| invariant | `\|f(x)\| ≤ tol` | `validator(output)` passes (0 violations) |
+| escalation ladder | `newton → secant → brentq` | `haiku → sonnet → opus` |
+| unexpected | invariant violated | output fails validation |
+| re-test (reproduce) | perturbed start | **retry the same tier** — flaky or deterministic? |
+| corroborate success | sign-change check | **re-call the tier** — reproducible or flaky? |
+| terminal failure | `unsolved` | `unvalidated` (all tiers exhausted) |
+
+The controller distinguishes a *flaky* failure (the retry validates → a sampling
+fluke, accepted after re-test, no escalation) from a *structural* one (the retry
+fails again → the tier is too weak → escalate to a stronger model). Model tiers
+are pluggable: `AnthropicCaller` hits the real API (lazy SDK import; a missing
+key or transport error degrades cleanly to an escalation, never a crash), while
+`ScriptedCaller` makes the whole audit/escalation logic deterministically
+testable offline. The live run in `llmdemo.py` activates only when
+`ANTHROPIC_API_KEY` is set.
 
 ## License
 
