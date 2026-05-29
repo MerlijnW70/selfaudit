@@ -1,0 +1,91 @@
+{
+  "problem": "cycling: x^3 - 2x + 2 = 0",
+  "tolerance": 1e-09,
+  "description": "find x with |f(x)| <= 1e-09",
+  "attempts": [
+    {
+      "index": 1,
+      "strategy": "newton",
+      "inputs": {
+        "guess": 0.0
+      },
+      "outcome": "exhausted",
+      "candidate": 5.838671768287895e-10,
+      "iterations": 80,
+      "checks": [
+        {
+          "name": "residual_below_tol",
+          "measured": 1.9999999988322656,
+          "threshold": 1e-09,
+          "satisfied": false,
+          "detail": "|f(5.838671768e-10)| = 2.000e+00"
+        }
+      ],
+      "classification": "unexpected",
+      "retests": [
+        {
+          "name": "reproduce_under_perturbation",
+          "description": "rerun 'newton' from perturbed start guess=0.1",
+          "reproduced_anomaly": true,
+          "checks": [
+            {
+              "name": "residual_below_tol",
+              "measured": 1.9999999988322656,
+              "threshold": 1e-09,
+              "satisfied": false,
+              "detail": "|f(5.838671768e-10)| = 2.000e+00"
+            }
+          ],
+          "conclusion": "anomaly reproduced: deterministic shortcoming of this method"
+        }
+      ],
+      "decision": "escalate",
+      "notes": "invariant violated; re-tested and escalated",
+      "params": null
+    },
+    {
+      "index": 2,
+      "strategy": "secant",
+      "inputs": {
+        "guess": 0.0
+      },
+      "outcome": "converged",
+      "candidate": -1.7692923542386314,
+      "iterations": 27,
+      "checks": [
+        {
+          "name": "residual_below_tol",
+          "measured": 0.0,
+          "threshold": 1e-09,
+          "satisfied": true,
+          "detail": "|f(-1.769292354)| = 0.000e+00"
+        }
+      ],
+      "classification": "expected",
+      "retests": [
+        {
+          "name": "corroborate_root",
+          "description": "re-evaluate invariant and check transversal sign change",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "residual_below_tol",
+              "measured": 0.0,
+              "threshold": 1e-09,
+              "satisfied": true,
+              "detail": "|f(-1.769292354)| = 0.000e+00"
+            }
+          ],
+          "conclusion": "independent re-evaluation confirms the root; sign change verified"
+        }
+      ],
+      "decision": "accept",
+      "notes": "invariant satisfied; outcome corroborated",
+      "params": null
+    }
+  ],
+  "final_status": "solved",
+  "final_root": -1.7692923542386314,
+  "winning_strategy": "secant",
+  "conclusion": ""
+}

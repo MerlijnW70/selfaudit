@@ -1,0 +1,15 @@
+{
+  "name": "Python (pytest + ruff baseline)",
+  "language": "python",
+  "gates": [
+    { "name": "lint",   "cmd": "ruff check ." },
+    { "name": "format", "cmd": "ruff format --check ." },
+    { "name": "type",   "cmd": "mypy ." },
+    { "name": "test",   "cmd": "pytest -q" }
+  ],
+  "notes": [
+    "Drop `type` if you don't use mypy. Replace with `pyright .` for the alternative.",
+    "Add `safety check` or `pip-audit` as a security gate once you have dependencies.",
+    "If you use `uv` or `poetry`, prepend the gate cmds with the appropriate runner."
+  ]
+}

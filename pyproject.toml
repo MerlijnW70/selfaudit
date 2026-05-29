@@ -1,0 +1,29 @@
+[project]
+name = "selfaudit"
+version = "0.1.0"
+description = "Self-Auditing AI: een zelf-corrigerende numerieke solver met volledige audit-trail"
+requires-python = ">=3.10"
+dependencies = ["scipy>=1.10"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["selfaudit"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

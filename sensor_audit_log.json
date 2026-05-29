@@ -1,0 +1,183 @@
+{
+  "problem": "regime-shift",
+  "tolerance": 0.15,
+  "description": "fit a physical model; expect rel-residual <= 0.15",
+  "attempts": [
+    {
+      "index": 1,
+      "strategy": "harmonic",
+      "inputs": {},
+      "outcome": "insufficient",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "rel_residual",
+          "measured": 0.8326899117170786,
+          "threshold": 0.15,
+          "satisfied": false,
+          "detail": "rms residual = 0.833 of the signal energy"
+        }
+      ],
+      "classification": "unexpected",
+      "retests": [
+        {
+          "name": "residual_whiteness",
+          "description": "test whether the residual is structureless (noise)",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "lag1_autocorr",
+              "measured": 0.9655635689880365,
+              "threshold": 0.5,
+              "satisfied": false,
+              "detail": "lag-1 autocorrelation of the residual = 0.966"
+            }
+          ],
+          "conclusion": "fit passes, but the residual retains structure: small unmodeled component"
+        },
+        {
+          "name": "segment_stationarity",
+          "description": "fit each time segment separately and compare the fit quality",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "worst_half_rel",
+              "measured": 0.029842872103133293,
+              "threshold": 0.15,
+              "satisfied": true,
+              "detail": "worst half rel-residual = 0.030 (1st=0.028, 2nd=0.030)"
+            }
+          ],
+          "conclusion": "each time segment fits on its OWN but the whole does not -> NON-STATIONARY: the system parameters change between the halves"
+        }
+      ],
+      "decision": "escalate",
+      "notes": "coherent residual: model does not explain the data; escalated",
+      "params": {
+        "omega": 4.646647866597469,
+        "amp": 0.5583696698401138,
+        "offset": 0.003319712043862254
+      }
+    },
+    {
+      "index": 2,
+      "strategy": "damped",
+      "inputs": {},
+      "outcome": "insufficient",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "rel_residual",
+          "measured": 0.7876144724145622,
+          "threshold": 0.15,
+          "satisfied": false,
+          "detail": "rms residual = 0.788 of the signal energy"
+        }
+      ],
+      "classification": "unexpected",
+      "retests": [
+        {
+          "name": "residual_whiteness",
+          "description": "test whether the residual is structureless (noise)",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "lag1_autocorr",
+              "measured": 0.9484606376033257,
+              "threshold": 0.5,
+              "satisfied": false,
+              "detail": "lag-1 autocorrelation of the residual = 0.948"
+            }
+          ],
+          "conclusion": "fit passes, but the residual retains structure: small unmodeled component"
+        },
+        {
+          "name": "segment_stationarity",
+          "description": "fit each time segment separately and compare the fit quality",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "worst_half_rel",
+              "measured": 0.08811797921654503,
+              "threshold": 0.15,
+              "satisfied": true,
+              "detail": "worst half rel-residual = 0.088 (1st=0.088, 2nd=0.029)"
+            }
+          ],
+          "conclusion": "each time segment fits on its OWN but the whole does not -> NON-STATIONARY: the system parameters change between the halves"
+        }
+      ],
+      "decision": "escalate",
+      "notes": "coherent residual: model does not explain the data; escalated",
+      "params": {
+        "omega": 3.058577760386594,
+        "gamma": 0.13333333333333333,
+        "amp": 1.3736026462421247
+      }
+    },
+    {
+      "index": 3,
+      "strategy": "two_harmonic",
+      "inputs": {},
+      "outcome": "insufficient",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "rel_residual",
+          "measured": 0.6899345860770454,
+          "threshold": 0.15,
+          "satisfied": false,
+          "detail": "rms residual = 0.690 of the signal energy"
+        }
+      ],
+      "classification": "unexpected",
+      "retests": [
+        {
+          "name": "residual_whiteness",
+          "description": "test whether the residual is structureless (noise)",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "lag1_autocorr",
+              "measured": 0.9529783904458894,
+              "threshold": 0.5,
+              "satisfied": false,
+              "detail": "lag-1 autocorrelation of the residual = 0.953"
+            }
+          ],
+          "conclusion": "fit passes, but the residual retains structure: small unmodeled component"
+        },
+        {
+          "name": "segment_stationarity",
+          "description": "fit each time segment separately and compare the fit quality",
+          "reproduced_anomaly": null,
+          "checks": [
+            {
+              "name": "worst_half_rel",
+              "measured": 0.027493885433428237,
+              "threshold": 0.15,
+              "satisfied": true,
+              "detail": "worst half rel-residual = 0.027 (1st=0.026, 2nd=0.027)"
+            }
+          ],
+          "conclusion": "each time segment fits on its OWN but the whole does not -> NON-STATIONARY: the system parameters change between the halves"
+        }
+      ],
+      "decision": "escalate",
+      "notes": "coherent residual: model does not explain the data; escalated",
+      "params": {
+        "omega": 4.646647866597469,
+        "omega2": 3.0718664298913914,
+        "amp1": 0.5486638071537131,
+        "amp2": 0.4709106762536981
+      }
+    }
+  ],
+  "final_status": "anomaly",
+  "final_root": null,
+  "winning_strategy": "two_harmonic",
+  "conclusion": "DISCOVERY \u2014 system change (non-stationary): each time segment fits, the whole does not"
+}
