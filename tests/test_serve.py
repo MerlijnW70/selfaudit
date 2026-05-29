@@ -21,6 +21,7 @@ def test_scan_payload_csv_returns_report() -> None:
     html = serve.scan_payload({"mode": "csv", "value": _CSV, "name": "t.csv"})
     assert "<!doctype html>" in html
     assert "verdict" in html
+    assert "<svg" in html  # the data chart is embedded in the report
 
 
 def test_scan_payload_unknown_mode_is_friendly_error() -> None:

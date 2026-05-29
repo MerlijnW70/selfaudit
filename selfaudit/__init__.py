@@ -14,6 +14,7 @@ from .datasets import (
     iqr_outliers,
     load_csv,
     no_missing_required,
+    svg_chart,
     timestamps_monotonic,
     values_in_range,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "Check",
     "CheckResult",
     "load_csv",
+    "svg_chart",
     "values_in_range",
     "timestamps_monotonic",
     "no_missing_required",

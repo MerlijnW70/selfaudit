@@ -338,3 +338,61 @@ def infer_checks(ds: Dataset, *, missing_fraction: float = 0.01) -> list[Check]:
         else:
             checks.append(distribution_stationary(col, max_shift=3.0))
     return checks
+
+
+def _is_ordered(vals: list[float]) -> bool:
+    decreases = sum(1 for a, b in zip(vals, vals[1:], strict=False) if b < a)
+    return decreases <= 0.05 * len(vals) and vals[-1] > vals[0]
+
+
+def svg_chart(ds: Dataset, *, width: int = 860, height: int = 220, max_series: int = 3) -> str:
+    """An inline SVG line chart of the dataset's *value* columns over row order.
+
+    Index/timestamp-like columns (monotonic sequences) are skipped — they are the
+    x-axis, not data. Each series is normalized to its own range so columns of
+    different scales fit one frame. Returns ``""`` when there is nothing to plot.
+    Pure stdlib; the SVG is self-contained and escapes all labels.
+    """
+    from html import escape
+
+    series: list[tuple[str, list[float]]] = []
+    for col in ds.columns:
+        vals = [v for _, v in ds.numeric_column(col) if v is not None]
+        if len(vals) < 3 or len(set(vals)) < 3 or _is_ordered(vals):
+            continue
+        series.append((col, vals))
+        if len(series) >= max_series:
+            break
+    if not series:
+        return ""
+
+    pad = 30
+    iw, ih = width - 2 * pad, height - 2 * pad
+    colors = ["#1f883d", "#cf222e", "#9a6700"]
+    parts = [
+        f"<svg viewBox='0 0 {width} {height}' width='100%' role='img' "
+        f"style='max-height:{height}px'>",
+        f"<rect x='{pad}' y='{pad}' width='{iw}' height='{ih}' fill='#fff' stroke='#e1e6ea'/>",
+    ]
+    for g in (0.0, 0.5, 1.0):
+        y = pad + ih * g
+        parts.append(
+            f"<line x1='{pad}' y1='{y:.1f}' x2='{pad + iw}' y2='{y:.1f}' stroke='#eef1f4'/>"
+        )
+    legend = []
+    for idx, (col, vals) in enumerate(series):
+        lo, hi = min(vals), max(vals)
+        rng = (hi - lo) or 1.0
+        n = len(vals)
+        pts = " ".join(
+            f"{pad + iw * i / (n - 1):.1f},{pad + ih * (1 - (v - lo) / rng):.1f}"
+            for i, v in enumerate(vals)
+        )
+        color = colors[idx % len(colors)]
+        parts.append(f"<polyline fill='none' stroke='{color}' stroke-width='2' points='{pts}'/>")
+        legend.append(
+            f"<span style='color:{color}'>●</span> {escape(col)} "
+            f"<span class='muted'>[{lo:.4g} – {hi:.4g}, n={n}]</span>"
+        )
+    parts.append("</svg>")
+    return "".join(parts) + f"<div class='legend'>{' &nbsp; '.join(legend)}</div>"

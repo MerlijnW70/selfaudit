@@ -14,7 +14,7 @@ from collections.abc import Callable
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from .datasets import Dataset, infer_checks, parse_csv
+from .datasets import Dataset, infer_checks, parse_csv, svg_chart
 from .datasetscanner import SelfAuditingDatasetScanner
 from .sources import SourceUnavailable, crypto_prices, fetch_csv, open_meteo, usgs_earthquakes
 
@@ -106,7 +106,7 @@ def scan_payload(data: dict) -> str:
         if ds.n == 0:
             return _error_html("the dataset has no rows")
         report = SelfAuditingDatasetScanner(infer_checks(ds)).scan(ds)
-        return report.log.to_html()
+        return report.log.to_html(chart=svg_chart(ds))
     except SourceUnavailable as exc:
         return _error_html(f"source unavailable — {exc}")
     except Exception as exc:  # noqa: BLE001 - any parse/scan error becomes a friendly page

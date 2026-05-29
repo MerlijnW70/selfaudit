@@ -29,6 +29,7 @@ from .datasets import (
     infer_checks,
     load_csv,
     no_missing_required,
+    svg_chart,
     timestamps_monotonic,
     values_in_range,
 )
@@ -224,7 +225,7 @@ def run(argv: list[str] | None = None) -> int:
     if args.json:
         report.log.save(args.json)
     if args.html:
-        report.log.save_html(args.html)
+        report.log.save_html(args.html, chart=svg_chart(ds))
     print(
         f"verdict: {report.status.upper()}  "
         f"(failures: {report.failed_checks or 'none'}; warnings: {report.warnings or 'none'})"

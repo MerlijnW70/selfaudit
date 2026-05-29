@@ -15,6 +15,7 @@ from selfaudit.datasets import (
     iqr_outliers,
     load_csv,
     no_missing_required,
+    svg_chart,
     timestamps_monotonic,
     values_in_range,
 )
@@ -308,6 +309,31 @@ def test_html_report_renders_verdict_and_checks(tmp_path) -> None:
     out = tmp_path / "report.html"
     report.log.save_html(str(out))
     assert out.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
+def test_svg_chart_plots_value_columns_and_skips_index() -> None:
+    # temperature varies (a value series); timestamp is an ascending index (skipped).
+    rows = [{"timestamp": str(i), "temperature": str(20 + (i % 7))} for i in range(40)]
+    svg = svg_chart(Dataset(["timestamp", "temperature"], rows, "w"))
+    assert "<svg" in svg
+    assert "<polyline" in svg
+    assert "temperature" in svg  # legend names the plotted series
+    assert "timestamp" not in svg  # the index column is not plotted
+
+
+def test_svg_chart_empty_when_nothing_to_plot() -> None:
+    # all-constant / low-cardinality numeric -> no meaningful series.
+    rows = [{"x": "5"} for _ in range(20)]
+    assert svg_chart(Dataset(["x"], rows, "flat")) == ""
+
+
+def test_to_html_embeds_chart_when_provided() -> None:
+    report = SelfAuditingDatasetScanner([values_in_range("temperature", -50, 150)]).scan(
+        _ds(["20", "21", "22"])
+    )
+    html = report.log.to_html(chart="<svg id='demo'></svg>")
+    assert "<svg id='demo'></svg>" in html
+    assert "class='chart'" in html
 
 
 def test_html_report_escapes_content() -> None:

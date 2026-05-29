@@ -136,10 +136,10 @@ class AuditLog:
             "skip": ("SKIPPED", "muted"),
         }.get(attempt.decision, (attempt.decision.upper(), "muted"))
 
-    def to_html(self) -> str:
+    def to_html(self, *, chart: str = "") -> str:
         """A self-contained, shareable HTML report: summary banner, severity chips,
-        a sortable findings table, and collapsible re-test details. One portable
-        file — inline CSS, a touch of vanilla JS, no build step, no dependencies."""
+        an optional data chart, a sortable findings table, and collapsible re-test
+        details. One portable file — inline CSS, a touch of vanilla JS, no build."""
         from html import escape
 
         verdict, tone = self._verdict()
@@ -177,7 +177,9 @@ class AuditLog:
             "details{margin-top:6px}summary{cursor:pointer;color:#57606a;font-size:13px}"
             ".notes{color:#656d76;font-size:13px;margin-top:4px}"
             "code{background:#eff1f3;padding:1px 5px;border-radius:4px}"
-            "footer{color:#8c959f;font-size:12px;margin-top:18px}"
+            ".chart{background:#fff;border:1px solid #d0d7de;border-radius:10px;"
+            "padding:14px;margin:0 0 16px}.legend{font-size:12px;color:#424a53;margin-top:8px}"
+            ".muted{color:#8c959f}footer{color:#8c959f;font-size:12px;margin-top:18px}"
         )
 
         parts: list[str] = []
@@ -191,6 +193,8 @@ class AuditLog:
         parts.append(f"<div class='counts'>{summary}</div>")
         if self.conclusion:
             parts.append(f"<p class='concl'>{escape(self.conclusion)}</p>")
+        if chart:
+            parts.append(f"<div class='chart'>{chart}</div>")
 
         parts.append("<table id='findings'>")
         parts.append(
@@ -230,9 +234,9 @@ class AuditLog:
         parts.append("</div></body></html>")
         return "".join(parts)
 
-    def save_html(self, path: str) -> None:
+    def save_html(self, path: str, *, chart: str = "") -> None:
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write(self.to_html())
+            fh.write(self.to_html(chart=chart))
 
     def render(self) -> str:
         """A human-readable audit report."""
