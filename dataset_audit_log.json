@@ -1,0 +1,137 @@
+{
+  "problem": "sensor-stream",
+  "tolerance": 0.0,
+  "description": "every rule check must pass for the dataset to be trusted",
+  "attempts": [
+    {
+      "index": 1,
+      "strategy": "missing_required",
+      "inputs": {},
+      "outcome": "clean",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "missing_required",
+          "measured": 0.004,
+          "threshold": 0.01,
+          "satisfied": true,
+          "detail": "2/500 rows (0.4%) missing one of ['timestamp', 'sensor_id', 'temperature']"
+        }
+      ],
+      "classification": "expected",
+      "retests": [],
+      "decision": "accept",
+      "notes": "rule satisfied",
+      "params": null
+    },
+    {
+      "index": 2,
+      "strategy": "range[temperature]",
+      "inputs": {},
+      "outcome": "violation",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "range[temperature]",
+          "measured": 0.12,
+          "threshold": 0.0,
+          "satisfied": false,
+          "detail": "60/500 rows have temperature outside [-50, 150]"
+        }
+      ],
+      "classification": "unexpected",
+      "retests": [
+        {
+          "name": "segment_analysis",
+          "description": "re-run the failing check on each row-segment to localize the anomaly",
+          "reproduced_anomaly": true,
+          "checks": [
+            {
+              "name": "segment_failures",
+              "measured": 1.0,
+              "threshold": 0.0,
+              "satisfied": false,
+              "detail": "1/5 row-segments fail the check"
+            }
+          ],
+          "conclusion": "violation reproduces in exactly one segment (rows 400\u2013499): a localized burst \u2014 likely a regime shift or a faulty-sensor window"
+        }
+      ],
+      "decision": "flag",
+      "notes": "rule violated in rows 420\u2013479; segment-analysed",
+      "params": null
+    },
+    {
+      "index": 3,
+      "strategy": "monotonic[timestamp]",
+      "inputs": {},
+      "outcome": "clean",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "monotonic[timestamp]",
+          "measured": 0.0,
+          "threshold": 0.0,
+          "satisfied": true,
+          "detail": "0/500 rows where timestamp decreases"
+        }
+      ],
+      "classification": "expected",
+      "retests": [],
+      "decision": "accept",
+      "notes": "rule satisfied",
+      "params": null
+    },
+    {
+      "index": 4,
+      "strategy": "duplicate_rate",
+      "inputs": {},
+      "outcome": "clean",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "duplicate_rate",
+          "measured": 0.0,
+          "threshold": 0.0,
+          "satisfied": true,
+          "detail": "0/500 duplicate rows (0.0%)"
+        }
+      ],
+      "classification": "expected",
+      "retests": [],
+      "decision": "accept",
+      "notes": "rule satisfied",
+      "params": null
+    },
+    {
+      "index": 5,
+      "strategy": "stationary[temperature]",
+      "inputs": {},
+      "outcome": "clean",
+      "candidate": null,
+      "iterations": 0,
+      "checks": [
+        {
+          "name": "stationary[temperature]",
+          "measured": 0.8041309825720822,
+          "threshold": 3.0,
+          "satisfied": true,
+          "detail": "temperature mean shifts 0.80\u03c3 between halves (1st=20, 2nd=67.4)"
+        }
+      ],
+      "classification": "expected",
+      "retests": [],
+      "decision": "accept",
+      "notes": "rule satisfied",
+      "params": null
+    }
+  ],
+  "final_status": "untrusted",
+  "final_root": null,
+  "winning_strategy": null,
+  "conclusion": "DO NOT TRUST as-is \u2014 failed checks: range[temperature]"
+}

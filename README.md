@@ -45,6 +45,13 @@ Application 3 — LLM output validation:
 - `selfaudit/llmdemo.py` — demo runner that produces `llm_audit_log.json`.
 - `tests/test_llm.py` — pytest suite (deterministic; no API key needed).
 
+Application 4 — dataset trust scanning:
+- `selfaudit/datasets.py` — pure-stdlib CSV `Dataset` + pluggable rule checks
+  (range, monotonic timestamps, missing-values budget, duplicate rate, regime shift).
+- `selfaudit/datasetscanner.py` — the Self-Auditing scanner (`SelfAuditingDatasetScanner`).
+- `selfaudit/datasetdemo.py` — demo runner that produces `dataset_audit_log.json`.
+- `tests/test_datasets.py` — pytest suite.
+
 ## Requirements
 
 - Python ≥ 3.10
@@ -61,6 +68,7 @@ python -m selfaudit              # root finder: 6 scenarios, writes audit_log.js
 python -m selfaudit.sensordemo   # sensor anomaly: 5 scenarios, writes sensor_audit_log.json
 python -m selfaudit.noisedemo    # stochastic noise: Monte-Carlo over the re-test
 python -m selfaudit.llmdemo      # LLM validation: 4 scripted scenarios (+ live run if a key is set)
+python -m selfaudit.datasetdemo  # dataset scan: planted faulty-sensor window, writes dataset_audit_log.json
 pytest -q                        # test suite
 pytest --cov=selfaudit -q        # coverage (gate floor: 95%)
 ruff check . && ruff format --check . && mypy .   # anvil gates
@@ -149,6 +157,30 @@ Python may reject the proxy's CA with `CERTIFICATE_VERIFY_FAILED`. Point
 verification at your corporate root CA via the `SSL_CERT_FILE` env var (or
 `AnthropicCaller(..., ca_bundle=...)`). TLS verification is never disabled — only
 the trust anchor changes.
+
+## Application 4: the same loop, applied to dataset trust
+
+The fourth application turns the harness into a **dataset trust scanner**: it
+checks a table (e.g. a CSV of sensor readings) against explicit rules, re-tests
+every violation, and writes an audit trail explaining what can and cannot be
+trusted. Each rule is a checkable invariant; a violation is the unexpected
+outcome; the re-test is **segment analysis** — re-running the failing check on
+each row-segment to localize and classify the anomaly.
+
+| Mapping | root finder | dataset scan |
+| --- | --- | --- |
+| invariant | `\|f(x)\| ≤ tol` | each rule check passes (range, monotonic, missing < 1%, …) |
+| unexpected | invariant violated | a check fails |
+| re-test | perturbed start | **segment analysis** — which rows reproduce the violation? |
+| classification | — | localized burst (regime shift / faulty window) vs systemic vs boundary |
+| verdict | `solved` / `unsolved` | `trusted` / `untrusted` |
+
+Where a normal script reports *"found 183 bad rows"*, the scanner reports *which*
+rows, *whether* the anomaly is localized or systemic, and *what kind* of problem
+it is — then writes it all to an audit log. The demo plants a stuck-high sensor
+fault in rows 420–479 and the segment-analysis re-test pins it back to exactly
+that window. Checks are pluggable (the `Check` interface), so business or
+scientific rules drop straight in.
 
 ## License
 

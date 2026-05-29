@@ -4,6 +4,18 @@ from __future__ import annotations
 
 from .audit import Attempt, AuditLog, ExpectationCheck, ReTest
 from .auditor import SelfAuditingSolver, Solution, SolveFailed
+from .datasets import (
+    Check,
+    CheckResult,
+    Dataset,
+    distribution_stationary,
+    duplicate_rate_below,
+    load_csv,
+    no_missing_required,
+    timestamps_monotonic,
+    values_in_range,
+)
+from .datasetscanner import ScanReport, SelfAuditingDatasetScanner
 from .diagnostician import AnomalyDetected, FitDiagnosis, SelfAuditingFitter
 from .fitting import FitResult, Model
 from .llm import (
@@ -44,6 +56,17 @@ __all__ = [
     "SelfAuditingFitter",
     "FitResult",
     "Model",
+    "SelfAuditingDatasetScanner",
+    "ScanReport",
+    "Dataset",
+    "Check",
+    "CheckResult",
+    "load_csv",
+    "values_in_range",
+    "timestamps_monotonic",
+    "no_missing_required",
+    "duplicate_rate_below",
+    "distribution_stationary",
     "SelfAuditingValidator",
     "Validation",
     "ValidationFailed",

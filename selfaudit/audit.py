@@ -132,6 +132,8 @@ class AuditLog:
             "noise": "NO DISCOVERY (noise)",
             "validated": "output validated",
             "unvalidated": "NOT validated — all model tiers exhausted",
+            "trusted": "dataset TRUSTED — all checks passed",
+            "untrusted": "dataset UNTRUSTED — one or more checks failed",
             "pending": "pending",
         }
         lines.append("")
