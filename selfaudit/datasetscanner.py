@@ -6,8 +6,8 @@ dataset satisfies an explicit rule:
 * **expected** outcome   -> the check passes. Recorded as accepted, no re-test.
 * **unexpected** outcome -> the check fails. Re-test by **segment analysis**:
   re-run the failing check on each row-segment to *localize* the anomaly and
-  classify it — a contiguous burst (e.g. a regime shift or a faulty-sensor
-  window) versus a systemic, dataset-wide problem.
+  classify it — a contiguous burst (concentrated in one part of the data) versus
+  a systemic, dataset-wide problem.
 
 Unlike the solver/validator, a scan never raises: it always returns a
 :class:`ScanReport` whose ``trusted`` flag and :class:`AuditLog` explain exactly
@@ -52,9 +52,9 @@ def _segment_retest(check: Check, ds: Dataset, n_segments: int = 5) -> ReTest:
     """Re-run the failing check on each contiguous row-segment to localize it.
 
     Where the violations concentrate is the discriminator: one segment ->
-    localized burst (regime shift / faulty window); every segment -> systemic;
-    none individually -> only emerges at full-dataset scale (a boundary or
-    aggregate effect).
+    localized burst (concentrated in one part of the data); every segment ->
+    systemic; none individually -> only emerges at full-dataset scale (a boundary
+    or aggregate effect).
     """
     n = ds.n
     seg = max(1, -(-n // n_segments))  # ceil division
