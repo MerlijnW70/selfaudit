@@ -9,6 +9,10 @@ figures out sensible checks for you, re-tests every anomaly to tell real problem
 from noise, and gives a clear verdict — **TRUSTED**, **NEEDS REVIEW**, or
 **UNTRUSTED** — with the exact rows and a plain-English reason.
 
+**What keeps people using it:** the row-level *“where exactly is it wrong,”* it
+runs **fully local / private**, and it’s **zero-config — useful on the first run,
+with no setup.**
+
 > Beta (v0.0.1) — APIs may still change.
 
 ---
