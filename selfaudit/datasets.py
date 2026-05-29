@@ -103,6 +103,15 @@ def _unique_columns(raw: list[str]) -> list[str]:
     return out
 
 
+def _has_content(row: list[str]) -> bool:
+    """True if a parsed row carries any data. Drops both empty lines and the
+    all-comma filler rows (``,,,`` -> ``['', '', '']``) that exported CSVs often
+    contain, which csv.reader otherwise reports as truthy ghost rows of blanks.
+    A row with even one non-blank field is kept — partial rows are real data the
+    scanner is meant to flag, not noise."""
+    return any(cell.strip() for cell in row)
+
+
 def parse_csv(text: str, name: str = "") -> Dataset:
     """Parse CSV/TSV *text* into a :class:`Dataset`.
 
@@ -115,7 +124,7 @@ def parse_csv(text: str, name: str = "") -> Dataset:
         delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
     except csv.Error:
         delimiter = ","
-    raw_rows = [r for r in csv.reader(io.StringIO(text), delimiter=delimiter) if r]
+    raw_rows = [r for r in csv.reader(io.StringIO(text), delimiter=delimiter) if _has_content(r)]
     if not raw_rows:
         return Dataset([], [], name)
     if _all_numeric(raw_rows[0]):
@@ -250,7 +259,7 @@ def sample_csv_file(path: str, n: int, *, name: str = "", seed: int = 0) -> Data
             columns = _unique_columns(next(reader))
         except StopIteration:
             return Dataset([], [], name or path)
-        sampled, total = _reservoir(reader, n, rng)
+        sampled, total = _reservoir((r for r in reader if _has_content(r)), n, rng)
     rows = [
         {columns[i]: (r[i] if i < len(r) else "") for i in range(len(columns))} for r in sampled
     ]

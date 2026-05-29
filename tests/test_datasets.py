@@ -98,6 +98,17 @@ def test_parse_csv_dedupes_duplicate_and_blank_headers() -> None:
     assert ds.rows[0] == {"a": "1", "a.2": "2", "col3": "3", "b": "4"}  # all 4 values kept
 
 
+def test_parse_csv_drops_all_blank_filler_rows() -> None:
+    # Exported CSVs (dogfood: financial_anomaly_data.csv) carry all-comma filler
+    # rows; csv.reader reports ['',''] as truthy, so they used to survive as ghost
+    # rows of empty cells ("first row is empty"). They must be dropped — while a
+    # row with even one real value is kept (partial data the scanner should flag).
+    ds = parse_csv("ts,amount\n,\n   ,  \n2023,100\n2024,\n")
+    assert ds.n == 2  # the two all-blank filler rows are gone
+    assert ds.rows[0] == {"ts": "2023", "amount": "100"}
+    assert ds.rows[1] == {"ts": "2024", "amount": ""}  # partial row kept (missing amount)
+
+
 def test_parse_csv_headerless_numeric() -> None:
     ds = parse_csv("1,2,3\n4,5,6\n")
     assert ds.columns == ["col1", "col2", "col3"]
