@@ -197,6 +197,15 @@ def test_brentq_auto_brackets_from_guess() -> None:
     assert abs(out.candidate**2 - 2.0) <= 1e-9
 
 
+def test_brentq_when_guess_is_exactly_a_root() -> None:
+    """If the auto-bracket search starts exactly on a root, brentq returns it
+    immediately (degenerate a == b interval)."""
+    out = brentq(Problem("exact", lambda x: x, guess=0.0))
+    assert out.candidate == 0.0
+    assert out.iterations == 0
+    assert out.status == "converged"
+
+
 def test_brentq_rejects_bracket_without_sign_change() -> None:
     with pytest.raises(NumericalFailure):
         brentq(Problem("x", lambda x: x * x - 2.0, bracket=(3.0, 4.0)))

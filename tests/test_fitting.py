@@ -203,6 +203,19 @@ def test_noise_demo_runs(capsys) -> None:
     assert "Pure noise" in out
 
 
+def test_sensor_demo_runs_and_writes_log(tmp_path, monkeypatch, capsys) -> None:
+    """The sensor demo runner runs all scenarios and writes sensor_audit_log.json."""
+    from selfaudit.sensordemo import main
+
+    monkeypatch.chdir(tmp_path)
+    main()
+    out = capsys.readouterr().out
+    assert "SELF-AUDIT REPORT" in out
+    written = tmp_path / "sensor_audit_log.json"
+    assert written.exists()
+    assert json.loads(written.read_text(encoding="utf-8"))["final_status"] == "anomaly"
+
+
 # --------------------------------------------------------------------------- #
 # Numerical building blocks (defensive coverage)
 # --------------------------------------------------------------------------- #

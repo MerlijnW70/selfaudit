@@ -5,7 +5,8 @@
     { "name": "lint",   "cmd": "ruff check ." },
     { "name": "format", "cmd": "ruff format --check ." },
     { "name": "type",   "cmd": "mypy ." },
-    { "name": "test",   "cmd": "pytest -q" }
+    { "name": "test",   "cmd": "pytest -q" },
+    { "name": "coverage", "cmd": "pytest --cov=selfaudit -q" }
   ],
   "notes": [
     "Drop `type` if you don't use mypy. Replace with `pyright .` for the alternative.",

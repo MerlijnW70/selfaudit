@@ -43,16 +43,18 @@ Application 2 — anomaly detection in sensor data (physics/engineering):
 - Python ≥ 3.10
 - [`scipy`](https://scipy.org/) ≥ 1.10 — the root-finder engine (App 1). App 2 is
   pure standard library.
-- Dev/quality gates: `pytest`, `ruff`, `mypy` (run via the ANVIL gate, see below).
+- Dev/quality gates: `pytest`, `pytest-cov`, `ruff`, `mypy` (run via the ANVIL gate,
+  see below). Install with `pip install -e ".[dev]"`.
 
 ## Usage
 
 ```bash
-pip install -e .                 # installs scipy (the root-finder engine)
+pip install -e ".[dev]"          # installs scipy + dev gate tools (pytest, cov, ruff, mypy)
 python -m selfaudit              # root finder: 6 scenarios, writes audit_log.json
 python -m selfaudit.sensordemo   # sensor anomaly: 5 scenarios, writes sensor_audit_log.json
 python -m selfaudit.noisedemo    # stochastic noise: Monte-Carlo over the re-test
 pytest -q                        # test suite
+pytest --cov=selfaudit -q        # coverage (gate floor: 95%)
 ruff check . && ruff format --check . && mypy .   # anvil gates
 ```
 
