@@ -25,3 +25,6 @@ env/
 # Scratch: fetched third-party data & generated HTML reports
 titanic.csv
 *report.html
+# Large / third-party datasets dropped in for testing (keep examples/sample.csv)
+examples/financial_anomaly_data.csv
+examples/*.xlsx
