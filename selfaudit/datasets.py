@@ -127,21 +127,39 @@ def timestamps_monotonic(field_name: str, *, max_fraction: float = 0.0) -> Check
 
 
 def no_missing_required(fields: Iterable[str], *, max_fraction: float = 0.01) -> Check:
-    """At most ``max_fraction`` of rows may be missing any of the required fields."""
+    """Each required field must be missing in at most ``max_fraction`` of rows.
+
+    Reported *per column* — the check fails if any single field exceeds the
+    budget, and the detail names the offending columns with their individual
+    missing rates (so "Cabin 77%, Age 20%" rather than a blunt aggregate).
+    """
     required = list(fields)
 
     def run(ds: Dataset) -> CheckResult:
+        fracs = {
+            f: _fraction(sum(1 for row in ds.rows if (row.get(f) or "").strip() == ""), ds.n)
+            for f in required
+        }
+        worst = max(fracs.values(), default=0.0)
+        over = sorted((f for f in required if fracs[f] > max_fraction), key=lambda f: -fracs[f])
         bad = [
             i
             for i, row in enumerate(ds.rows)
-            if any((row.get(f) or "").strip() == "" for f in required)
+            if any((row.get(f) or "").strip() == "" for f in over)
         ]
-        frac = _fraction(len(bad), ds.n)
+        if over:
+            breakdown = ", ".join(f"{f} {fracs[f]:.1%}" for f in over)
+            detail = f"columns over the {max_fraction:.1%} budget: {breakdown}"
+        elif fracs:
+            worst_field = max(fracs, key=lambda f: fracs[f])
+            detail = f"all {len(required)} columns within budget (worst: {worst_field} {worst:.1%})"
+        else:
+            detail = "no columns to check"
         return CheckResult(
-            ok=frac <= max_fraction,
-            measured=frac,
+            ok=not over,
+            measured=worst,
             threshold=max_fraction,
-            detail=f"{len(bad)}/{ds.n} rows ({frac:.1%}) missing one of {required}",
+            detail=detail,
             bad_rows=bad,
         )
 

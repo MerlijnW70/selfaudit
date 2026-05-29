@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from selfaudit.datasets import (
     Check,
     Dataset,
@@ -89,6 +91,23 @@ def test_no_missing_required_respects_budget() -> None:
     assert not no_missing_required(["temperature"]).run(ds).ok
     # generous budget -> passes
     assert no_missing_required(["temperature"], max_fraction=0.5).run(ds).ok
+
+
+def test_no_missing_required_reports_per_column_breakdown() -> None:
+    # Two columns with different missing rates: only the over-budget ones are named,
+    # worst-first, each with its own rate (the per-column breakdown).
+    rows = [
+        {"a": "1" if i else "", "b": "" if i < 5 else "2"}  # a: 1/10 missing, b: 5/10 missing
+        for i in range(10)
+    ]
+    res = no_missing_required(["a", "b"]).run(Dataset(["a", "b"], rows, "m"))
+    assert not res.ok
+    assert res.measured == pytest.approx(0.5)  # worst column drives the measured value
+    assert res.detail.index("b 50") < res.detail.index("a 10")  # worst-first, per-column rates
+    # a clean dataset names the worst column for transparency
+    clean = no_missing_required(["a"]).run(_ds(["1", "2", "3"], a=["x", "y", "z"]))
+    assert clean.ok
+    assert "within budget" in clean.detail
 
 
 def test_duplicate_rate_detects_repeats() -> None:
