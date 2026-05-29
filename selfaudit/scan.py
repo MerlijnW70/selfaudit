@@ -359,7 +359,7 @@ def run(argv: list[str] | None = None) -> int:
     if args.json:
         report.log.save(args.json)
     if args.html:
-        report.log.save_html(args.html, chart=svg_chart(ds))
+        report.log.save_html(args.html, chart=svg_chart(ds, bad_rows=report.bad_rows))
     if args.bad_rows:
         n = _write_bad_rows(args.bad_rows, ds, report)
         print(f"wrote {n} flagged rows to {args.bad_rows}")

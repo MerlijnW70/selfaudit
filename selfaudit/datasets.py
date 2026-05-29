@@ -807,54 +807,105 @@ def _is_ordered(vals: list[float]) -> bool:
     return decreases <= 0.05 * len(vals) and vals[-1] > vals[0]
 
 
-def svg_chart(ds: Dataset, *, width: int = 860, height: int = 220, max_series: int = 3) -> str:
-    """An inline SVG line chart of the dataset's *value* columns over row order.
+def svg_chart(
+    ds: Dataset,
+    *,
+    width: int = 860,
+    panel_height: int = 96,
+    max_series: int = 4,
+    bad_rows: dict[str, list[int]] | None = None,
+) -> str:
+    """Small-multiples line chart: one panel per numeric *value* column, each on its
+    own real y-scale (min/max labelled, so values are actually readable), with the
+    offending rows marked in red so the picture agrees with the verdict.
 
     Index/timestamp-like columns (monotonic sequences) are skipped — they are the
-    x-axis, not data. Each series is normalized to its own range so columns of
-    different scales fit one frame. Returns ``""`` when there is nothing to plot.
-    Pure stdlib; the SVG is self-contained and escapes all labels.
+    x-axis, not data. ``bad_rows`` is the scan report's ``check -> rows`` mapping;
+    column-scoped checks (``outliers[amount]``) mark their own panel, whole-row
+    checks (``duplicate_rate``) mark every panel. Returns ``""`` when there is
+    nothing to plot. Pure stdlib; the SVG is self-contained and escapes all labels.
     """
     from html import escape
 
-    series: list[tuple[str, list[float]]] = []
+    series: list[tuple[str, list[tuple[int, float]]]] = []
     for col in ds.columns:
-        vals = [v for _, v in ds.numeric_column(col) if v is not None]
+        pairs = [(i, v) for i, v in ds.numeric_column(col) if v is not None]
+        vals = [v for _, v in pairs]
         if len(vals) < 3 or len(set(vals)) < 3 or _is_ordered(vals):
             continue
-        series.append((col, vals))
+        series.append((col, pairs))
         if len(series) >= max_series:
             break
     if not series:
         return ""
 
-    pad = 30
-    iw, ih = width - 2 * pad, height - 2 * pad
-    colors = ["#1f883d", "#cf222e", "#9a6700"]
+    col_bad: dict[str, set[int]] = {}
+    global_bad: set[int] = set()
+    for name, rows in (bad_rows or {}).items():
+        _, sep, rest = name.partition("[")
+        if sep and rest.endswith("]"):
+            col_bad.setdefault(rest[:-1], set()).update(rows)
+        else:
+            global_bad.update(rows)
+
+    n = ds.n
+    pad_l, pad_r, pad_t, pad_b = 56, 14, 18, 18
+    iw = width - pad_l - pad_r
+    span = iw / (n - 1) if n > 1 else 0.0
+    height = pad_t + len(series) * panel_height + pad_b
+    colors = ["#1f883d", "#0969da", "#8250df", "#9a6700"]
     parts = [
         f"<svg viewBox='0 0 {width} {height}' width='100%' role='img' "
-        f"style='max-height:{height}px'>",
-        f"<rect x='{pad}' y='{pad}' width='{iw}' height='{ih}' fill='#fff' stroke='#e1e6ea'/>",
+        f"style='max-height:{height}px;font:11px system-ui,Arial'>"
     ]
-    for g in (0.0, 0.5, 1.0):
-        y = pad + ih * g
-        parts.append(
-            f"<line x1='{pad}' y1='{y:.1f}' x2='{pad + iw}' y2='{y:.1f}' stroke='#eef1f4'/>"
-        )
-    legend = []
-    for idx, (col, vals) in enumerate(series):
+    has_marks = False
+    for idx, (col, pairs) in enumerate(series):
+        vals = [v for _, v in pairs]
         lo, hi = min(vals), max(vals)
         rng = (hi - lo) or 1.0
-        n = len(vals)
-        pts = " ".join(
-            f"{pad + iw * i / (n - 1):.1f},{pad + ih * (1 - (v - lo) / rng):.1f}"
-            for i, v in enumerate(vals)
-        )
         color = colors[idx % len(colors)]
-        parts.append(f"<polyline fill='none' stroke='{color}' stroke-width='2' points='{pts}'/>")
-        legend.append(
-            f"<span style='color:{color}'>●</span> {escape(col)} "
-            f"<span class='muted'>[{_num(lo)} – {_num(hi)}, n={n}]</span>"
+        top = pad_t + idx * panel_height
+        ptop = top + 16
+        ph = panel_height - 26
+        bad = col_bad.get(col, set()) | global_bad
+        parts.append(
+            f"<rect x='{pad_l}' y='{ptop:.1f}' width='{iw}' height='{ph}' "
+            f"fill='#fff' stroke='#e1e6ea'/>"
         )
+        parts.append(
+            f"<text x='{pad_l}' y='{top + 11:.1f}' fill='#1f2328' font-weight='600'>"
+            f"{escape(col)}</text>"
+        )
+        parts.append(
+            f"<text x='{pad_l - 6}' y='{ptop + 9:.1f}' text-anchor='end' fill='#8c959f'>"
+            f"{escape(_num(hi))}</text>"
+        )
+        parts.append(
+            f"<text x='{pad_l - 6}' y='{ptop + ph:.1f}' text-anchor='end' fill='#8c959f'>"
+            f"{escape(_num(lo))}</text>"
+        )
+        pts = " ".join(
+            f"{pad_l + span * i:.1f},{ptop + ph * (1 - (v - lo) / rng):.1f}" for i, v in pairs
+        )
+        parts.append(f"<polyline fill='none' stroke='{color}' stroke-width='1.5' points='{pts}'/>")
+        for i, v in pairs:
+            if i in bad:
+                has_marks = True
+                cx = pad_l + span * i
+                cy = ptop + ph * (1 - (v - lo) / rng)
+                parts.append(
+                    f"<circle cx='{cx:.1f}' cy='{cy:.1f}' r='3.2' fill='#cf222e'>"
+                    f"<title>row {i}: {escape(_num(v))}</title></circle>"
+                )
+    parts.append(f"<text x='{pad_l}' y='{height - 5}' fill='#8c959f'>row 0</text>")
+    parts.append(
+        f"<text x='{width - pad_r}' y='{height - 5}' text-anchor='end' fill='#8c959f'>"
+        f"row {max(n - 1, 0)}</text>"
+    )
     parts.append("</svg>")
-    return "".join(parts) + f"<div class='legend'>{' &nbsp; '.join(legend)}</div>"
+    legend = (
+        "<div class='legend'><span style='color:#cf222e'>●</span> offending rows</div>"
+        if has_marks
+        else ""
+    )
+    return "".join(parts) + legend

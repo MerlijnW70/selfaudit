@@ -191,7 +191,7 @@ def scan_payload(data: dict) -> str:
         if ds.n == 0:
             return _error_html("the dataset has no rows")
         report = SelfAuditingDatasetScanner(infer_checks(ds)).scan(ds)
-        return report.log.to_html(chart=svg_chart(ds))
+        return report.log.to_html(chart=svg_chart(ds, bad_rows=report.bad_rows))
     except SourceUnavailable as exc:
         return _error_html(f"source unavailable — {exc}")
     except Exception as exc:  # noqa: BLE001 - any parse/scan error becomes a friendly page

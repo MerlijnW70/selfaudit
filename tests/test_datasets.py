@@ -623,6 +623,21 @@ def test_svg_chart_plots_value_columns_and_skips_index() -> None:
     assert "timestamp" not in svg  # the index column is not plotted
 
 
+def test_svg_chart_marks_offending_rows_per_column() -> None:
+    # The chart must agree with the verdict: a column's bad rows are marked red on
+    # that column's panel only; a clean column's panel has no markers.
+    rows = [{"amount": str(40 + (i * 7) % 80), "score": str(50 + i % 9)} for i in range(30)]
+    rows[7]["amount"] = "99999"  # a planted outlier in amount, row 7
+    ds = Dataset(["amount", "score"], rows, "t")
+    svg = svg_chart(ds, bad_rows={"outliers[amount]": [7]})
+    assert svg.count("<rect") == 2  # one panel per value column (small multiples)
+    assert svg.count("fill='#cf222e'") == 1  # exactly the one offending point, marked
+    assert "row 7:" in svg  # marker carries a hover tooltip with the row + value
+    assert "offending rows" in svg  # legend key for the red markers
+    # real y-axis labels (not 0-1 normalized) are present
+    assert "text-anchor='end'" in svg
+
+
 def test_svg_chart_empty_when_nothing_to_plot() -> None:
     # all-constant / low-cardinality numeric -> no meaningful series.
     rows = [{"x": "5"} for _ in range(20)]

@@ -168,7 +168,8 @@ class AuditLog:
         css = (
             "body{font:14px/1.6 system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#f6f8fa;"
             "color:#1f2328}.wrap{max-width:960px;margin:0 auto;padding:28px 20px}"
-            "h1{font-size:20px;margin:0 0 2px}.sub{color:#656d76;margin:0 0 18px}"
+            "h1{font-size:20px;margin:0 0 2px;overflow-wrap:anywhere}"
+            ".sub{color:#656d76;margin:0 0 18px;overflow-wrap:anywhere}"
             f".verdict{{display:inline-block;padding:8px 18px;border-radius:8px;color:#fff;"
             f"font-weight:800;font-size:16px;letter-spacing:.3px;background:{accent}}}"
             ".counts{margin:14px 0 6px}.concl{color:#424a53;margin:6px 0 18px}"
