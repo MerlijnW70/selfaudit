@@ -1,5 +1,22 @@
 # Self-Auditing AI — a self-correcting algorithm
 
+## Quickstart — vet any dataset in one command
+
+```bash
+pip install -e .
+
+selfaudit data.csv                      # scan a local file (rules inferred automatically)
+selfaudit https://host/data.csv         # scan a CSV straight from a URL — no download
+selfaudit --source crypto               # scan a free live feed (also: open-meteo, usgs)
+```
+
+No rules to write, no config: `selfaudit` infers sensible checks from the data,
+re-tests every anomaly, and prints a verdict — **TRUSTED**, **NEEDS REVIEW**
+(warnings only), or **UNTRUSTED** — exiting `0`/`0`/`1` so it drops into CI. Add
+`--html report.html` for a shareable report, `--strict` to fail on warnings too.
+
+---
+
 An experiment in *self-correcting algorithms*: a system that holds an
 **expectation** about its own outcome and, the moment the actual outcome
 deviates from it, **automatically starts a re-test + validation cycle** — all

@@ -8,7 +8,13 @@ import urllib.request
 import pytest
 
 from selfaudit import sources
-from selfaudit.sources import SourceUnavailable, crypto_prices, open_meteo, usgs_earthquakes
+from selfaudit.sources import (
+    SourceUnavailable,
+    crypto_prices,
+    fetch_csv,
+    open_meteo,
+    usgs_earthquakes,
+)
 
 
 class _FakeResp:
@@ -107,6 +113,36 @@ def test_crypto_prices_missing_series_raises(monkeypatch) -> None:
     _mock_urlopen(monkeypatch, {"no_prices": []})
     with pytest.raises(SourceUnavailable):
         crypto_prices()
+
+
+def test_fetch_csv_parses_a_url(monkeypatch) -> None:
+    csv_text = "ts,temperature\n0,20.5\n1,21.0\n"
+
+    class _Resp:
+        def read(self) -> bytes:
+            return csv_text.encode("utf-8")
+
+        def __enter__(self) -> _Resp:
+            return self
+
+        def __exit__(self, *exc) -> None:
+            return None
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=20.0: _Resp())
+    ds = fetch_csv("https://example.com/d.csv")
+    assert ds.columns == ["ts", "temperature"]
+    assert ds.n == 2
+    assert ds.rows[0]["temperature"] == "20.5"
+    assert ds.name == "https://example.com/d.csv"
+
+
+def test_fetch_csv_network_error_is_clean(monkeypatch) -> None:
+    def boom(req, timeout=20.0):
+        raise urllib.error.URLError("no route")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    with pytest.raises(SourceUnavailable):
+        fetch_csv("https://example.com/d.csv")
 
 
 def test_fetch_json_network_error_is_clean(monkeypatch) -> None:

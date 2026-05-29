@@ -93,10 +93,17 @@ def test_run_writes_json(tmp_path, capsys) -> None:
     assert json.loads(out_json.read_text(encoding="utf-8"))["final_status"] == "untrusted"
 
 
-def test_run_no_checks_is_usage_error(tmp_path, capsys) -> None:
+def test_run_no_rules_auto_infers(tmp_path, capsys) -> None:
+    # Zero-config: no rule flags -> infer from the data, don't error.
     csv = _write_csv(tmp_path, _CLEAN)
-    assert run([csv]) == 2
-    assert "no checks specified" in capsys.readouterr().err
+    code = run([csv])
+    assert code == 0  # clean data -> trusted
+    assert "no rules given — inferred" in capsys.readouterr().out
+
+
+def test_run_no_input_is_usage_error(capsys) -> None:
+    assert run([]) == 2
+    assert "provide a CSV path or --source" in capsys.readouterr().err
 
 
 def test_run_bad_spec_is_usage_error(tmp_path, capsys) -> None:
@@ -145,7 +152,7 @@ def test_run_source_unavailable_returns_three(monkeypatch, capsys) -> None:
     monkeypatch.setattr(scan, "open_meteo", offline)
     code = run(["--source", "open-meteo", "--range", "temperature:-50:60"])
     assert code == 3
-    assert "live source unavailable" in capsys.readouterr().err
+    assert "source unavailable" in capsys.readouterr().err
 
 
 def test_run_rejects_both_csv_and_source(tmp_path, capsys) -> None:
@@ -182,6 +189,25 @@ def test_run_writes_html_report(tmp_path) -> None:
 def test_run_bad_csv_path_is_error(capsys) -> None:
     assert run(["/no/such/file-12345.csv", "--infer"]) == 2
     assert "cannot read CSV" in capsys.readouterr().err
+
+
+def test_run_scans_a_csv_url(monkeypatch, capsys) -> None:
+    # `selfaudit https://.../data.csv` fetches and scans directly — no download step.
+    rows = [{"ts": str(i), "temperature": str(20 + i % 4)} for i in range(40)]
+    ds = Dataset(["ts", "temperature"], rows, "https://example.com/d.csv")
+    monkeypatch.setattr(scan, "fetch_csv", lambda url, **k: ds)
+    code = run(["https://example.com/d.csv"])  # auto-infer
+    assert code == 0
+    assert "inferred" in capsys.readouterr().out
+
+
+def test_run_csv_url_unavailable_returns_three(monkeypatch, capsys) -> None:
+    def offline(url, **k):
+        raise SourceUnavailable("offline")
+
+    monkeypatch.setattr(scan, "fetch_csv", offline)
+    assert run(["https://example.com/d.csv"]) == 3
+    assert "source unavailable" in capsys.readouterr().err
 
 
 def test_run_all_check_kinds_together(tmp_path, capsys) -> None:

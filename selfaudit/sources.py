@@ -15,6 +15,8 @@ Sources (both free, no auth, real-time):
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import urllib.error
 import urllib.request
@@ -47,6 +49,25 @@ def _fetch_json(url: str, *, timeout: float = 20.0) -> dict[str, Any]:
 
 def _iso_to_epoch(iso: str) -> float:
     return datetime.fromisoformat(iso).timestamp()
+
+
+def fetch_csv(url: str, *, timeout: float = 20.0) -> Dataset:
+    """Fetch a CSV straight from a URL into a :class:`Dataset` — no download step.
+
+    Same stdlib + OS-trust-store path as the JSON sources; a network failure
+    surfaces as :class:`SourceUnavailable`.
+    """
+    enable_os_truststore()
+    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - http(s) only
+            text = resp.read().decode("utf-8")
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
+        raise SourceUnavailable(f"could not fetch {url}: {exc}") from exc
+    reader = csv.DictReader(io.StringIO(text))
+    columns = list(reader.fieldnames or [])
+    rows = [{k: (v if v is not None else "") for k, v in r.items()} for r in reader]
+    return Dataset(columns, rows, url)
 
 
 def open_meteo(

@@ -33,7 +33,7 @@ from .datasets import (
     values_in_range,
 )
 from .datasetscanner import SelfAuditingDatasetScanner
-from .sources import SourceUnavailable, crypto_prices, open_meteo, usgs_earthquakes
+from .sources import SourceUnavailable, crypto_prices, fetch_csv, open_meteo, usgs_earthquakes
 
 
 def _parse_range(spec: str) -> Check:
@@ -78,13 +78,17 @@ def _parse_stationary(spec: str) -> Check:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="python -m selfaudit.scan",
-        description="Scan a CSV against explicit rules; re-test and audit every violation.",
+        prog="selfaudit",
+        description=(
+            "Vet a dataset's trustworthiness. Point it at a CSV (path or URL) or a "
+            "live --source; with no rules it infers them from the data. "
+            "Exit 0 = trusted/review, 1 = untrusted (or any warning with --strict)."
+        ),
     )
     p.add_argument(
         "csv",
         nargs="?",
-        help="path to the CSV file to scan (omit when using --source)",
+        help="path OR URL of the CSV to scan (omit when using --source)",
     )
     p.add_argument(
         "--source",
@@ -187,31 +191,32 @@ def run(argv: list[str] | None = None) -> int:
 
     # Load the dataset first — inference needs to see the data.
     try:
-        ds = _load_source(args) if args.source else load_csv(args.csv)
+        if args.source:
+            ds = _load_source(args)
+        elif args.csv.startswith(("http://", "https://")):
+            ds = fetch_csv(args.csv)
+        else:
+            ds = load_csv(args.csv)
     except SourceUnavailable as exc:
-        print(f"error: live source unavailable — {exc}", file=sys.stderr)
+        print(f"error: source unavailable — {exc}", file=sys.stderr)
         return 3
     except OSError as exc:
         print(f"error: cannot read CSV — {exc}", file=sys.stderr)
         return 2
 
-    if args.infer:
+    # Build checks: explicit rule flags if given, otherwise infer from the data.
+    try:
+        explicit = _checks_from_args(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.infer or not explicit:
         checks = infer_checks(ds)
         if not args.quiet:
-            print(f"inferred {len(checks)} checks: {', '.join(c.name for c in checks)}\n")
+            lead = "inferred" if args.infer else "no rules given — inferred"
+            print(f"{lead} {len(checks)} checks: {', '.join(c.name for c in checks)}\n")
     else:
-        try:
-            checks = _checks_from_args(args)
-        except ValueError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 2
-        if not checks:
-            print(
-                "error: no checks specified — use --infer or "
-                "--range/--monotonic/--missing/--duplicates/--stationary",
-                file=sys.stderr,
-            )
-            return 2
+        checks = explicit
 
     report = SelfAuditingDatasetScanner(checks).scan(ds)
     if not args.quiet:
