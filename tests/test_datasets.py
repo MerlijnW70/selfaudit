@@ -456,6 +456,10 @@ def test_scan_records_offending_rows() -> None:
     assert report.bad_rows["range[temperature]"] == [20, 21, 22]
     # ... and they render in the text report
     assert "offending rows: 20, 21, 22" in report.log.render()
+    # ... and a sample of the actual offending rows' data is embedded for the report
+    assert flagged.row_preview[0]["temperature"] == "999"
+    assert "999" in report.log.to_html()  # the offending value shows in the HTML preview
+    assert "sample offending rows" in report.log.to_html()
 
 
 def test_scan_untrusted_flags_and_localizes() -> None:

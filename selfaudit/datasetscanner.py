@@ -22,6 +22,7 @@ from .audit import Attempt, AuditLog, ExpectationCheck, ReTest
 from .datasets import Check, CheckResult, Dataset, load_csv
 
 _ROWS_IN_AUDIT = 1000  # cap offending-row indices stored per check in the audit log
+_PREVIEW_ROWS = 5  # sample of actual offending rows embedded in the report
 
 
 @dataclass
@@ -161,6 +162,7 @@ class SelfAuditingDatasetScanner:
                     f"[{check.severity.upper()}] rule violated in rows "
                     f"{_row_span(result.bad_rows)}; segment-analysed",
                     rows=result.bad_rows[:_ROWS_IN_AUDIT],
+                    row_preview=[ds.rows[i] for i in result.bad_rows[:_PREVIEW_ROWS]],
                 )
             )
 

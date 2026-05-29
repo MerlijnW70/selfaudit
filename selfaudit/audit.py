@@ -71,6 +71,7 @@ class Attempt:
     notes: str
     params: dict[str, Any] | None = None  # fitted model parameters (for model fitting)
     rows: list[int] = field(default_factory=list)  # offending row indices (dataset checks)
+    row_preview: list[dict[str, Any]] = field(default_factory=list)  # sample of offending rows
 
 
 @dataclass
@@ -181,6 +182,9 @@ class AuditLog:
             ".chart{background:#fff;border:1px solid #d0d7de;border-radius:10px;"
             "padding:14px;margin:0 0 16px}.legend{font-size:12px;color:#424a53;margin-top:8px}"
             ".muted{color:#8c959f}footer{color:#8c959f;font-size:12px;margin-top:18px}"
+            ".preview{font-size:12px;border-collapse:collapse;margin-top:6px;display:block;"
+            "overflow-x:auto;max-width:100%}.preview th,.preview td{border:1px solid #e1e6ea;"
+            "padding:3px 7px;white-space:nowrap;text-align:left}.preview th{background:#f6f8fa}"
         )
 
         parts: list[str] = []
@@ -215,6 +219,18 @@ class AuditLog:
                 shown = ", ".join(str(r) for r in a.rows[:15])
                 more = " …" if len(a.rows) > 15 else ""
                 cell += f"<div class='notes'>offending rows: {escape(shown)}{more}</div>"
+            if a.row_preview:
+                cols = list(a.row_preview[0].keys())
+                head = "".join(f"<th>{escape(str(c))}</th>" for c in cols)
+                body = ""
+                for prow in a.row_preview:
+                    cells = "".join(f"<td>{escape(str(prow.get(c, '')))}</td>" for c in cols)
+                    body += f"<tr>{cells}</tr>"
+                cell += (
+                    f"<details><summary>show {len(a.row_preview)} sample offending rows</summary>"
+                    f"<table class='preview'><thead><tr>{head}</tr></thead>"
+                    f"<tbody>{body}</tbody></table></details>"
+                )
             if a.notes:
                 cell += f"<div class='notes'>{escape(a.notes)}</div>"
             parts.append(
