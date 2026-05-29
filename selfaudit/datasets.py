@@ -74,17 +74,25 @@ class CheckResult:
 
 @dataclass
 class Check:
-    """A named rule: ``run(dataset) -> CheckResult``."""
+    """A named rule: ``run(dataset) -> CheckResult``.
+
+    ``severity`` rates how serious a violation is: ``"fail"`` (a hard problem ->
+    UNTRUSTED), ``"warn"`` (worth review but often legitimate, e.g. outliers ->
+    REVIEW), or ``"info"``. This is what keeps the scanner from crying wolf.
+    """
 
     name: str
     run: Callable[[Dataset], CheckResult]
+    severity: str = "fail"
 
 
 def _fraction(count: int, total: int) -> float:
     return count / total if total else 0.0
 
 
-def values_in_range(field_name: str, lo: float, hi: float, *, max_fraction: float = 0.0) -> Check:
+def values_in_range(
+    field_name: str, lo: float, hi: float, *, max_fraction: float = 0.0, severity: str = "fail"
+) -> Check:
     """Numeric ``field_name`` must lie in ``[lo, hi]`` (missing values are ignored
     here — that is the missing-values check's job)."""
 
@@ -99,10 +107,12 @@ def values_in_range(field_name: str, lo: float, hi: float, *, max_fraction: floa
             bad_rows=bad,
         )
 
-    return Check(f"range[{field_name}]", run)
+    return Check(f"range[{field_name}]", run, severity)
 
 
-def timestamps_monotonic(field_name: str, *, max_fraction: float = 0.0) -> Check:
+def timestamps_monotonic(
+    field_name: str, *, max_fraction: float = 0.0, severity: str = "warn"
+) -> Check:
     """Numeric ``field_name`` must be non-decreasing from row to row."""
 
     def run(ds: Dataset) -> CheckResult:
@@ -123,10 +133,12 @@ def timestamps_monotonic(field_name: str, *, max_fraction: float = 0.0) -> Check
             bad_rows=bad,
         )
 
-    return Check(f"monotonic[{field_name}]", run)
+    return Check(f"monotonic[{field_name}]", run, severity)
 
 
-def no_missing_required(fields: Iterable[str], *, max_fraction: float = 0.01) -> Check:
+def no_missing_required(
+    fields: Iterable[str], *, max_fraction: float = 0.01, severity: str = "fail"
+) -> Check:
     """Each required field must be missing in at most ``max_fraction`` of rows.
 
     Reported *per column* — the check fails if any single field exceeds the
@@ -163,10 +175,10 @@ def no_missing_required(fields: Iterable[str], *, max_fraction: float = 0.01) ->
             bad_rows=bad,
         )
 
-    return Check("missing_required", run)
+    return Check("missing_required", run, severity)
 
 
-def duplicate_rate_below(*, max_fraction: float = 0.0) -> Check:
+def duplicate_rate_below(*, max_fraction: float = 0.0, severity: str = "warn") -> Check:
     """At most ``max_fraction`` of rows may be exact duplicates of an earlier row."""
 
     def run(ds: Dataset) -> CheckResult:
@@ -187,10 +199,12 @@ def duplicate_rate_below(*, max_fraction: float = 0.0) -> Check:
             bad_rows=bad,
         )
 
-    return Check("duplicate_rate", run)
+    return Check("duplicate_rate", run, severity)
 
 
-def distribution_stationary(field_name: str, *, max_shift: float = 3.0) -> Check:
+def distribution_stationary(
+    field_name: str, *, max_shift: float = 3.0, severity: str = "warn"
+) -> Check:
     """The mean of ``field_name`` must not shift between the first and second half
     by more than ``max_shift`` pooled standard deviations (a regime-shift guard)."""
 
@@ -224,7 +238,7 @@ def distribution_stationary(field_name: str, *, max_shift: float = 3.0) -> Check
             bad_rows=bad,
         )
 
-    return Check(f"stationary[{field_name}]", run)
+    return Check(f"stationary[{field_name}]", run, severity)
 
 
 def _percentile(sorted_vals: list[float], q: float) -> float:
@@ -241,7 +255,9 @@ def _percentile(sorted_vals: list[float], q: float) -> float:
     return sorted_vals[lo]
 
 
-def iqr_outliers(field_name: str, *, k: float = 3.0, max_fraction: float = 0.0) -> Check:
+def iqr_outliers(
+    field_name: str, *, k: float = 3.0, max_fraction: float = 0.0, severity: str = "warn"
+) -> Check:
     """Numeric ``field_name`` must have no values beyond Tukey fences
     ``[Q1 - k·IQR, Q3 + k·IQR]``.
 
@@ -277,7 +293,7 @@ def iqr_outliers(field_name: str, *, k: float = 3.0, max_fraction: float = 0.0) 
             bad_rows=bad,
         )
 
-    return Check(f"outliers[{field_name}]", run)
+    return Check(f"outliers[{field_name}]", run, severity)
 
 
 def _looks_numeric(ds: Dataset, field_name: str) -> list[float]:

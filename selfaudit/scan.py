@@ -143,6 +143,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="auto-propose checks from the data itself (zero-config; ignores rule flags)",
     )
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="treat warnings as failures too (exit 1 on REVIEW, not just UNTRUSTED)",
+    )
     p.add_argument("--json", metavar="PATH", help="write the audit log to PATH as JSON")
     p.add_argument("--html", metavar="PATH", help="write a shareable HTML trust report to PATH")
     p.add_argument("--quiet", action="store_true", help="print only the final verdict")
@@ -215,9 +220,14 @@ def run(argv: list[str] | None = None) -> int:
         report.log.save(args.json)
     if args.html:
         report.log.save_html(args.html)
-    verdict = "TRUSTED" if report.trusted else "UNTRUSTED"
-    print(f"verdict: {verdict}  (failed: {report.failed_checks or 'none'})")
-    return 0 if report.trusted else 1
+    print(
+        f"verdict: {report.status.upper()}  "
+        f"(failures: {report.failed_checks or 'none'}; warnings: {report.warnings or 'none'})"
+    )
+    # Exit 1 on a hard failure; with --strict, warnings (REVIEW) also fail the gate.
+    if report.status == "untrusted" or (args.strict and report.warnings):
+        return 1
+    return 0
 
 
 def main() -> None:  # pragma: no cover

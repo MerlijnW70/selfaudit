@@ -183,8 +183,11 @@ def test_infer_checks_flags_a_planted_outlier_end_to_end() -> None:
     report = SelfAuditingDatasetScanner(infer_checks(Dataset(["ts", "temperature"], rows))).scan(
         Dataset(["ts", "temperature"], rows)
     )
-    assert not report.trusted
-    assert any("outliers[temperature]" == c for c in report.failed_checks)
+    # An outlier is a WARNING (often legitimate), so the verdict is REVIEW, not a
+    # hard UNTRUSTED — and it shows up under warnings, not failures.
+    assert report.status == "review"
+    assert "outliers[temperature]" in report.warnings
+    assert report.failed_checks == []
 
 
 # --------------------------------------------------------------------------- #
@@ -246,6 +249,34 @@ def test_scan_untrusted_flags_and_localizes() -> None:
     assert flagged.decision == "flag"
     seg = next(rt for rt in flagged.retests if rt.name == "segment_analysis")
     assert "localized burst" in seg.conclusion
+
+
+def test_scan_severity_review_vs_untrusted() -> None:
+    # A warn-severity violation alone -> REVIEW (not a hard failure).
+    warn_only = SelfAuditingDatasetScanner([iqr_outliers("temperature")]).scan(
+        _ds([str(20 + i % 4) for i in range(40)] + ["9999"])
+    )
+    assert warn_only.status == "review"
+    assert warn_only.warnings == ["outliers[temperature]"]
+    assert warn_only.failed_checks == []
+    assert not warn_only.trusted
+
+    # A fail-severity violation -> UNTRUSTED, regardless of warnings.
+    hard = SelfAuditingDatasetScanner(
+        [values_in_range("temperature", -50, 150), iqr_outliers("temperature")]
+    ).scan(_ds([str(20 + i % 4) for i in range(40)] + ["9999"]))
+    assert hard.status == "untrusted"
+    assert "range[temperature]" in hard.failed_checks
+    assert "outliers[temperature]" in hard.warnings  # the outlier is still recorded, as a warning
+
+
+def test_custom_severity_override() -> None:
+    # Callers can promote a normally-warn check to a hard failure.
+    strict_outliers = iqr_outliers("temperature", severity="fail")
+    report = SelfAuditingDatasetScanner([strict_outliers]).scan(
+        _ds([str(20 + i % 4) for i in range(40)] + ["9999"])
+    )
+    assert report.status == "untrusted"
 
 
 def test_scan_accepts_a_dataset_or_a_path(tmp_path) -> None:

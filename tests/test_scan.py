@@ -114,13 +114,17 @@ def test_run_with_open_meteo_source(monkeypatch, capsys) -> None:
     assert "TRUSTED" in capsys.readouterr().out
 
 
-def test_run_with_usgs_source_flags_newest_first(monkeypatch, capsys) -> None:
+def test_run_with_usgs_source_warns_newest_first(monkeypatch, capsys) -> None:
     rows = [{"time": str(100 - i), "mag": "2.0"} for i in range(6)]  # decreasing time
     ds = Dataset(["time", "mag"], rows, "usgs:all_hour")
     monkeypatch.setattr(scan, "usgs_earthquakes", lambda period="all_hour": ds)
+    # monotonic is a WARNING (a newest-first feed isn't broken) -> REVIEW, exit 0.
     code = run(["--source", "usgs", "--monotonic", "time", "--quiet"])
-    assert code == 1  # newest-first feed -> monotonic check fails
-    assert "UNTRUSTED" in capsys.readouterr().out
+    assert code == 0
+    assert "REVIEW" in capsys.readouterr().out
+    # ...but --strict makes warnings fail the gate.
+    monkeypatch.setattr(scan, "usgs_earthquakes", lambda period="all_hour": ds)
+    assert run(["--source", "usgs", "--monotonic", "time", "--strict", "--quiet"]) == 1
 
 
 def test_run_with_crypto_source(monkeypatch, capsys) -> None:
@@ -154,9 +158,11 @@ def test_run_infer_flags_planted_outlier(tmp_path, capsys) -> None:
     body = "ts,temperature\n" + "".join(f"{i},{20 + i % 5}\n" for i in range(60))
     body = body.replace("30,2", "30,9000", 1)  # plant an outlier at ts=30
     csv = _write_csv(tmp_path, body)
+    # An outlier is a warning -> REVIEW (exit 0) by default; --strict fails it.
     code = run([csv, "--infer", "--quiet"])
-    assert code == 1
-    assert "UNTRUSTED" in capsys.readouterr().out
+    assert code == 0
+    assert "REVIEW" in capsys.readouterr().out
+    assert run([csv, "--infer", "--strict", "--quiet"]) == 1
 
 
 def test_run_infer_announces_inferred_checks(tmp_path, capsys) -> None:

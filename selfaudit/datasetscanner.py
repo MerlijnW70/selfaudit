@@ -24,9 +24,14 @@ from .datasets import Check, CheckResult, Dataset, load_csv
 
 @dataclass
 class ScanReport:
-    trusted: bool
+    status: str  # "trusted" | "review" | "untrusted"
     log: AuditLog
-    failed_checks: list[str] = field(default_factory=list)
+    failed_checks: list[str] = field(default_factory=list)  # fail-severity violations
+    warnings: list[str] = field(default_factory=list)  # warn/info violations
+
+    @property
+    def trusted(self) -> bool:
+        return self.status == "trusted"
 
 
 def _expectation(check: Check, result: CheckResult) -> ExpectationCheck:
@@ -106,7 +111,8 @@ class SelfAuditingDatasetScanner:
             tolerance=0.0,
             description="every rule check must pass for the dataset to be trusted",
         )
-        failed: list[str] = []
+        failures: list[str] = []  # severity "fail"
+        warnings: list[str] = []  # severity "warn"/"info"
         for idx, check in enumerate(self.checks, start=1):
             result = check.run(ds)
             expectation = _expectation(check, result)
@@ -129,7 +135,9 @@ class SelfAuditingDatasetScanner:
                 )
                 continue
 
-            failed.append(check.name)
+            is_failure = check.severity == "fail"
+            (failures if is_failure else warnings).append(check.name)
+            decision = "flag" if is_failure else "warn"
             retest = _segment_retest(check, ds)
             log.attempts.append(
                 Attempt(
@@ -142,15 +150,23 @@ class SelfAuditingDatasetScanner:
                     [expectation],
                     "unexpected",
                     [retest],
-                    "flag",
-                    f"rule violated in rows {_row_span(result.bad_rows)}; segment-analysed",
+                    decision,
+                    f"[{check.severity.upper()}] rule violated in rows "
+                    f"{_row_span(result.bad_rows)}; segment-analysed",
                 )
             )
 
-        if failed:
-            log.finalize("untrusted", None, None)
-            log.conclusion = "DO NOT TRUST as-is — failed checks: " + ", ".join(failed)
+        if failures:
+            status = "untrusted"
+            conclusion = "DO NOT TRUST as-is — failed checks: " + ", ".join(failures)
+            if warnings:
+                conclusion += "; warnings: " + ", ".join(warnings)
+        elif warnings:
+            status = "review"
+            conclusion = "NEEDS REVIEW — warnings (no hard failures): " + ", ".join(warnings)
         else:
-            log.finalize("trusted", None, None)
-            log.conclusion = "all checks passed — dataset satisfies every stated rule"
-        return ScanReport(not failed, log, failed)
+            status = "trusted"
+            conclusion = "all checks passed — dataset satisfies every stated rule"
+        log.finalize(status, None, None)
+        log.conclusion = conclusion
+        return ScanReport(status, log, failures, warnings)

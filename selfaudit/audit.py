@@ -100,9 +100,8 @@ class AuditLog:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(self.to_json())
 
-    def _verdict(self) -> tuple[str, bool]:
-        """A human label for the final status and whether it is a 'good' outcome."""
-        good = self.final_status in ("solved", "fitted", "validated", "trusted")
+    def _verdict(self) -> tuple[str, str]:
+        """A human label for the final status and a tone (good/warn/bad) for styling."""
         labels = {
             "solved": "SOLVED",
             "unsolved": "UNSOLVED",
@@ -112,17 +111,26 @@ class AuditLog:
             "validated": "VALIDATED",
             "unvalidated": "NOT VALIDATED",
             "trusted": "TRUSTED",
+            "review": "NEEDS REVIEW",
             "untrusted": "UNTRUSTED",
             "pending": "PENDING",
         }
-        return labels.get(self.final_status, self.final_status.upper()), good
+        tone = {
+            "solved": "good",
+            "fitted": "good",
+            "validated": "good",
+            "trusted": "good",
+            "review": "warn",
+            "noise": "warn",
+        }.get(self.final_status, "bad")
+        return labels.get(self.final_status, self.final_status.upper()), tone
 
     def to_html(self) -> str:
         """A self-contained, shareable HTML report (inline CSS, no dependencies)."""
         from html import escape
 
-        verdict, good = self._verdict()
-        accent = "#1a7f37" if good else "#cf222e"
+        verdict, tone = self._verdict()
+        accent = {"good": "#1a7f37", "warn": "#9a6700", "bad": "#cf222e"}[tone]
         parts: list[str] = []
         parts.append("<!doctype html><html lang='en'><head><meta charset='utf-8'>")
         parts.append(f"<title>Self-Audit · {escape(self.problem)}</title>")
@@ -224,6 +232,7 @@ class AuditLog:
             "validated": "output validated",
             "unvalidated": "NOT validated — all model tiers exhausted",
             "trusted": "dataset TRUSTED — all checks passed",
+            "review": "dataset NEEDS REVIEW — warnings only (no hard failures)",
             "untrusted": "dataset UNTRUSTED — one or more checks failed",
             "pending": "pending",
         }
