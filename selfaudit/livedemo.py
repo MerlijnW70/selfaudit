@@ -13,16 +13,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from .audit import enable_utf8_output
 from .datasets import (
     Check,
     Dataset,
+    distribution_stationary,
     duplicate_rate_below,
     no_missing_required,
     timestamps_monotonic,
     values_in_range,
 )
 from .datasetscanner import ScanReport, SelfAuditingDatasetScanner
-from .sources import SourceUnavailable, open_meteo, usgs_earthquakes
+from .sources import SourceUnavailable, crypto_prices, open_meteo, usgs_earthquakes
 
 
 def _scan_source(
@@ -41,6 +43,7 @@ def _scan_source(
 
 
 def main() -> None:
+    enable_utf8_output()
     weather = _scan_source(
         "Open-Meteo hourly temperature (Amsterdam)",
         open_meteo,
@@ -61,6 +64,16 @@ def main() -> None:
             values_in_range("mag", -2.0, 10.0),
             timestamps_monotonic("time"),  # newest-first feed -> expected to flag
             duplicate_rate_below(max_fraction=0.0),
+        ],
+    )
+
+    _scan_source(
+        "CoinGecko Bitcoin price (last 24h)",
+        lambda: crypto_prices("bitcoin", "usd", days=1),
+        [
+            values_in_range("price", 0.0, 10_000_000.0),  # sanity bound
+            timestamps_monotonic("time"),  # ascending -> should pass
+            distribution_stationary("price", max_shift=3.0),  # volatile -> may flag a regime shift
         ],
     )
 

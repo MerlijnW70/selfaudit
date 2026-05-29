@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from .audit import enable_utf8_output
 from .diagnostician import AnomalyDetected, SelfAuditingFitter
 from .signals import noisy_harmonic_signal, pure_noise_signal
 
@@ -25,6 +26,7 @@ def _classify(fitter: SelfAuditingFitter, seed: int) -> str:
 
 
 def main(seeds: int = 12) -> None:
+    enable_utf8_output()
     fitter = SelfAuditingFitter()
     tally: Counter[str] = Counter()
     for seed in range(1, seeds + 1):

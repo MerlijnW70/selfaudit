@@ -9,8 +9,22 @@ deliberately both human-readable and machine-readable (JSON).
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import asdict, dataclass, field
 from typing import Any
+
+
+def enable_utf8_output() -> None:
+    """Best-effort: make stdout/stderr emit UTF-8 so audit reports — which contain
+    characters like ``σ``, en-dashes and ``…`` — print on any console, including a
+    Windows cp1252 terminal. A no-op where the stream cannot be reconfigured."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8")
+            except (ValueError, OSError):  # pragma: no cover - platform/stream dependent
+                pass
 
 
 @dataclass

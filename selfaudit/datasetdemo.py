@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 
+from .audit import enable_utf8_output
 from .datasets import (
     Dataset,
     distribution_stationary,
@@ -50,6 +51,7 @@ def _scanner() -> SelfAuditingDatasetScanner:
 
 
 def main() -> None:
+    enable_utf8_output()
     report = _scanner().scan(_synthetic_sensor_table())
     print(report.log.render())
     report.log.save("dataset_audit_log.json")

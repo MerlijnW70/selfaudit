@@ -42,7 +42,7 @@ from .solver import (
     newton,
     secant,
 )
-from .sources import SourceUnavailable, open_meteo, usgs_earthquakes
+from .sources import SourceUnavailable, crypto_prices, open_meteo, usgs_earthquakes
 
 __all__ = [
     "Attempt",
@@ -70,6 +70,7 @@ __all__ = [
     "distribution_stationary",
     "open_meteo",
     "usgs_earthquakes",
+    "crypto_prices",
     "SourceUnavailable",
     "SelfAuditingValidator",
     "Validation",

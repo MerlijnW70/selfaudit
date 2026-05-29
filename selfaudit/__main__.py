@@ -7,6 +7,7 @@ scenario to ``audit_log.json`` as persistent proof.
 
 from __future__ import annotations
 
+from .audit import enable_utf8_output
 from .auditor import SelfAuditingSolver, SolveFailed
 from .solver import Problem
 
@@ -30,6 +31,7 @@ def scenarios() -> list[Problem]:
 
 
 def main() -> None:
+    enable_utf8_output()
     solver = SelfAuditingSolver()
     saved = False
     for prob in scenarios():

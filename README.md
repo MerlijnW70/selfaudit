@@ -205,6 +205,8 @@ corporate proxy, and a clean `SourceUnavailable` (never a crash) when offline:
 
 - `open_meteo(lat, lon)` — hourly 2 m temperature forecast (Open-Meteo).
 - `usgs_earthquakes(period)` — recent earthquakes (USGS GeoJSON feed).
+- `crypto_prices(coin, vs_currency)` — recent price time series (CoinGecko); genuinely
+  volatile data that exercises the range and regime-shift checks.
 
 `python -m selfaudit.livedemo` fetches both and scans them live. A representative
 run: the **Open-Meteo** temperatures pass every rule (`TRUSTED`), while the
@@ -220,6 +222,8 @@ python -m selfaudit.scan --source open-meteo --lat 52.37 --lon 4.90 \
     --range temperature:-50:60 --monotonic epoch        # -> TRUSTED (exit 0)
 python -m selfaudit.scan --source usgs --monotonic time --range mag:-2:10
                                                         # -> UNTRUSTED (exit 1)
+python -m selfaudit.scan --source crypto --coin bitcoin \
+    --range price:0:10000000 --monotonic time --stationary price:3   # live BTC prices
 ```
 
 ## License

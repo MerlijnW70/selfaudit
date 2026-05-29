@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .audit import enable_utf8_output
 from .datasets import (
     Check,
     Dataset,
@@ -30,7 +31,7 @@ from .datasets import (
     values_in_range,
 )
 from .datasetscanner import SelfAuditingDatasetScanner
-from .sources import SourceUnavailable, open_meteo, usgs_earthquakes
+from .sources import SourceUnavailable, crypto_prices, open_meteo, usgs_earthquakes
 
 
 def _parse_range(spec: str) -> Check:
@@ -85,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--source",
-        choices=["open-meteo", "usgs"],
+        choices=["open-meteo", "usgs", "crypto"],
         help="fetch a free, real-time dataset instead of reading a CSV",
     )
     p.add_argument("--lat", type=float, default=52.37, help="latitude for --source open-meteo")
@@ -98,6 +99,9 @@ def build_parser() -> argparse.ArgumentParser:
         default="all_hour",
         help="feed period for --source usgs (e.g. all_hour, all_day, significant_week)",
     )
+    p.add_argument("--coin", default="bitcoin", help="coin id for --source crypto (CoinGecko)")
+    p.add_argument("--vs-currency", default="usd", help="quote currency for --source crypto")
+    p.add_argument("--days", type=int, default=1, help="history window in days for --source crypto")
     p.add_argument(
         "--range",
         action="append",
@@ -152,10 +156,13 @@ def _load_source(args: argparse.Namespace) -> Dataset:
     """Resolve the input dataset from --source, fetching live data as needed."""
     if args.source == "open-meteo":
         return open_meteo(args.lat, args.lon, forecast_days=args.forecast_days)
+    if args.source == "crypto":
+        return crypto_prices(args.coin, args.vs_currency, days=args.days)
     return usgs_earthquakes(args.period)
 
 
 def run(argv: list[str] | None = None) -> int:
+    enable_utf8_output()
     args = build_parser().parse_args(argv)
 
     if args.source and args.csv:

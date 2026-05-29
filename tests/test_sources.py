@@ -8,7 +8,7 @@ import urllib.request
 import pytest
 
 from selfaudit import sources
-from selfaudit.sources import SourceUnavailable, open_meteo, usgs_earthquakes
+from selfaudit.sources import SourceUnavailable, crypto_prices, open_meteo, usgs_earthquakes
 
 
 class _FakeResp:
@@ -82,6 +82,31 @@ def test_usgs_missing_features_raises(monkeypatch) -> None:
     _mock_urlopen(monkeypatch, {"not_features": 1})
     with pytest.raises(SourceUnavailable):
         usgs_earthquakes()
+
+
+_CRYPTO = {
+    "prices": [
+        [1780000000000, 72720.8],
+        [1780003600000, 73100.5],
+        ["bad", "row"],  # malformed entry -> skipped, still parses
+        [1780007200000, 73452.5],
+    ]
+}
+
+
+def test_crypto_prices_parses_and_skips_malformed(monkeypatch) -> None:
+    _mock_urlopen(monkeypatch, _CRYPTO)
+    ds = crypto_prices("bitcoin", "usd", days=1)
+    assert ds.columns == ["time", "price"]
+    assert ds.n == 3  # the malformed ["bad","row"] entry is skipped
+    assert ds.rows[0]["price"] == "72720.8"
+    assert ds.name == "coingecko:bitcoin-usd"
+
+
+def test_crypto_prices_missing_series_raises(monkeypatch) -> None:
+    _mock_urlopen(monkeypatch, {"no_prices": []})
+    with pytest.raises(SourceUnavailable):
+        crypto_prices()
 
 
 def test_fetch_json_network_error_is_clean(monkeypatch) -> None:

@@ -123,6 +123,17 @@ def test_run_with_usgs_source_flags_newest_first(monkeypatch, capsys) -> None:
     assert "UNTRUSTED" in capsys.readouterr().out
 
 
+def test_run_with_crypto_source(monkeypatch, capsys) -> None:
+    rows = [{"time": str(1000 + i), "price": str(70000 + i)} for i in range(8)]
+    ds = Dataset(["time", "price"], rows, "coingecko:bitcoin-usd")
+    monkeypatch.setattr(scan, "crypto_prices", lambda coin, vs, days=1: ds)
+    code = run(
+        ["--source", "crypto", "--coin", "bitcoin", "--range", "price:0:10000000", "--quiet"]
+    )
+    assert code == 0
+    assert "TRUSTED" in capsys.readouterr().out
+
+
 def test_run_source_unavailable_returns_three(monkeypatch, capsys) -> None:
     def offline(*a, **k):
         raise SourceUnavailable("offline")

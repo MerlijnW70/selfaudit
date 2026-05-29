@@ -7,6 +7,7 @@ report of the system change to ``sensor_audit_log.json``.
 
 from __future__ import annotations
 
+from .audit import enable_utf8_output
 from .diagnostician import AnomalyDetected, SelfAuditingFitter
 from .signals import (
     TimeSeries,
@@ -29,6 +30,7 @@ def scenarios() -> list[TimeSeries]:
 
 
 def main() -> None:
+    enable_utf8_output()
     fitter = SelfAuditingFitter()
     saved = False
     for series in scenarios():

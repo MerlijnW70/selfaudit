@@ -29,10 +29,14 @@ class SourceUnavailable(Exception):
     """A live data source could not be reached or returned unusable data."""
 
 
+_USER_AGENT = "selfaudit/0.1 (+https://github.com/MerlijnW70/selfaudit)"
+
+
 def _fetch_json(url: str, *, timeout: float = 20.0) -> dict[str, Any]:
     enable_os_truststore()  # secure proxy fix; a no-op when not needed
+    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 - https only
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - https only
             payload = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
         raise SourceUnavailable(f"could not fetch {url}: {exc}") from exc
@@ -78,6 +82,41 @@ def open_meteo(
             }
         )
     return Dataset(["time", "epoch", "temperature"], rows, f"open-meteo@{latitude},{longitude}")
+
+
+def crypto_prices(
+    coin: str = "bitcoin",
+    vs_currency: str = "usd",
+    *,
+    days: int = 1,
+    timeout: float = 20.0,
+) -> Dataset:
+    """Recent price time series for a coin from CoinGecko as a :class:`Dataset`.
+
+    Columns: ``time`` (epoch ms, ascending) and ``price``. Free and key-less.
+    Genuinely volatile data — good for exercising the range and regime-shift
+    checks on numbers that actually move.
+    """
+    url = (
+        f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart"
+        f"?vs_currency={vs_currency}&days={days}"
+    )
+    data = _fetch_json(url, timeout=timeout)
+    prices = data.get("prices")
+    if not isinstance(prices, list) or not prices:
+        raise SourceUnavailable("CoinGecko response missing the 'prices' series")
+    rows: list[dict[str, str]] = []
+    for point in prices:
+        if not isinstance(point, list) or len(point) < 2:
+            continue
+        try:
+            ts = float(point[0])
+        except (TypeError, ValueError):
+            continue  # skip malformed timestamps rather than crash
+        rows.append({"time": f"{ts:.0f}", "price": str(point[1])})
+    if not rows:
+        raise SourceUnavailable("CoinGecko 'prices' series had no usable points")
+    return Dataset(["time", "price"], rows, f"coingecko:{coin}-{vs_currency}")
 
 
 def usgs_earthquakes(period: str = "all_hour", *, timeout: float = 20.0) -> Dataset:

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 
-from .audit import AuditLog
+from .audit import AuditLog, enable_utf8_output
 from .llm import (
     AnthropicCaller,
     ScriptedCaller,
@@ -98,6 +98,7 @@ def _run(validator: SelfAuditingValidator, task: Task) -> AuditLog:
 
 
 def main() -> None:
+    enable_utf8_output()
     # Load .env (if present) so the live run can read ANTHROPIC_API_KEY /
     # SSL_CERT_FILE; the file is authoritative over any stale inherited value.
     load_dotenv(override=True)
