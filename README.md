@@ -47,6 +47,11 @@ Zero config, real public data — it surfaces the genuine issues (missing
 `Cabin`/`Age`, the famous extreme fares) and *doesn’t* cry wolf on the index
 column or zero-inflated counts.
 
+**Want the visual?** [`examples/sample-audit.html`](examples/sample-audit.html)
+is a finished report — download it and open in a browser (verdict banner,
+severity chips, a sortable findings table, collapsible re-test details).
+Regenerate it any time with `selfaudit examples/sample.csv --html examples/sample-audit.html`.
+
 ## What you get
 
 - **Zero-config** — `selfaudit data.csv` infers checks (missing-value budgets,
