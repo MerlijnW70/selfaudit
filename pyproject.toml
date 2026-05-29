@@ -8,6 +8,7 @@ dependencies = ["scipy>=1.10"]
 
 [project.scripts]
 selfaudit = "selfaudit.scan:main"
+selfaudit-serve = "selfaudit.serve:main"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "ruff", "mypy", "truststore"]
@@ -27,6 +28,10 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# serve.py embeds an HTML/JS page as a string literal; long lines are expected.
+"selfaudit/serve.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"

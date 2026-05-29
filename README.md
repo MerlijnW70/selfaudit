@@ -13,8 +13,13 @@ exact rows and a plain-English reason. No rules to write, no config.
 git clone https://github.com/MerlijnW70/selfaudit && cd selfaudit
 pip install -e .
 
-selfaudit yourdata.csv
+selfaudit yourdata.csv     # command line
+selfaudit-serve            # …or a local web UI: drag a CSV, see the report live
 ```
+
+`selfaudit-serve` opens a browser page where you can **drag-and-drop a CSV** (or
+paste a URL, or pick a live source) and get the verdict + report rendered live.
+It runs entirely on your machine — your data never leaves it.
 
 > Beta (v0.0.1) — APIs may still change.
 

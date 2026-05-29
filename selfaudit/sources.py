@@ -15,15 +15,13 @@ Sources (both free, no auth, real-time):
 
 from __future__ import annotations
 
-import csv
-import io
 import json
 import urllib.error
 import urllib.request
 from datetime import datetime
 from typing import Any
 
-from .datasets import Dataset
+from .datasets import Dataset, parse_csv
 from .llm import enable_os_truststore
 
 
@@ -64,10 +62,7 @@ def fetch_csv(url: str, *, timeout: float = 20.0) -> Dataset:
             text = resp.read().decode("utf-8")
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
         raise SourceUnavailable(f"could not fetch {url}: {exc}") from exc
-    reader = csv.DictReader(io.StringIO(text))
-    columns = list(reader.fieldnames or [])
-    rows = [{k: (v if v is not None else "") for k, v in r.items()} for r in reader]
-    return Dataset(columns, rows, url)
+    return parse_csv(text, url)
 
 
 def open_meteo(

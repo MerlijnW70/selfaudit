@@ -17,6 +17,7 @@ re-tests by segment analysis to localize and classify the anomaly.
 from __future__ import annotations
 
 import csv
+import io
 import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -52,13 +53,18 @@ class Dataset:
         return out
 
 
+def parse_csv(text: str, name: str = "") -> Dataset:
+    """Parse CSV *text* into a :class:`Dataset` (pure stdlib, header row required)."""
+    reader = csv.DictReader(io.StringIO(text))
+    columns = list(reader.fieldnames or [])
+    rows = [{k: (v if v is not None else "") for k, v in r.items()} for r in reader]
+    return Dataset(columns, rows, name)
+
+
 def load_csv(path: str, *, name: str = "") -> Dataset:
-    """Load a CSV file into a :class:`Dataset` (pure stdlib, header row required)."""
-    with open(path, newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        columns = list(reader.fieldnames or [])
-        rows = [{k: (v if v is not None else "") for k, v in r.items()} for r in reader]
-    return Dataset(columns, rows, name or path)
+    """Load a CSV file into a :class:`Dataset`."""
+    with open(path, encoding="utf-8") as fh:
+        return parse_csv(fh.read(), name or path)
 
 
 @dataclass
