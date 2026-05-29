@@ -24,6 +24,19 @@ _SOURCES: dict[str, Callable[..., Dataset]] = {
     "crypto": crypto_prices,
 }
 
+
+def _sample_csv() -> str:
+    """A tiny demo dataset with a planted gap (row 8) and outlier (row 6) so the
+    'Sample CSV' button shows a non-trivial UNTRUSTED verdict with zero setup."""
+    rows = ["timestamp,sensor_id,temperature"]
+    for i in range(12):
+        temp = "" if i == 8 else ("250.0" if i == 6 else f"{20 + i % 5}.0")
+        rows.append(f"{i},S1,{temp}")
+    return "\n".join(rows) + "\n"
+
+
+_SAMPLE_CSV = _sample_csv()
+
 _INDEX = """<!doctype html><html lang='en'><head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>selfaudit</title><style>
@@ -38,7 +51,15 @@ input[type=text]{flex:1;min-width:220px;padding:9px 11px;border:1px solid #d0d7d
 select,button{padding:9px 12px;border:1px solid #d0d7de;border-radius:8px;background:#fff}
 button{background:#1f883d;color:#fff;border:0;font-weight:700;cursor:pointer}
 iframe{width:100%;height:620px;border:1px solid #d0d7de;border-radius:12px;background:#fff}
-.muted{color:#8c959f;font-size:13px}</style></head><body><div class='wrap'>
+.muted{color:#8c959f;font-size:13px}
+.examples{margin-top:14px;color:#57606a;font-size:14px}
+button.secondary{background:#f3f5f7;color:#1f2328;border:1px solid #d0d7de;font-weight:600;margin-left:6px}
+button.secondary:hover{background:#e9edf1}
+button:disabled{opacity:.5;cursor:default}
+.bar{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.bar .grow{flex:1}
+.spinner{width:16px;height:16px;border:2px solid #d0d7de;border-top-color:#1f883d;border-radius:50%;display:inline-block;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class='wrap'>
 <h1>selfaudit</h1><p class='sub'>Drop a CSV, paste a URL, or pick a live source — get a trust verdict.</p>
 <div class='card'>
   <div class='drop' id='drop'>Drop a CSV here, or click to choose a file
@@ -51,15 +72,31 @@ iframe{width:100%;height:620px;border:1px solid #d0d7de;border-radius:12px;backg
       <option value='usgs'>usgs (earthquakes)</option>
       <option value='crypto'>crypto (bitcoin)</option>
     </select>
-    <button onclick='scan()'>Scan</button>
+    <button id='scanBtn' onclick='scan()'>Scan</button>
+  </div>
+  <div class='examples'>Try an example:
+    <button class='secondary' onclick="runExample('weather')">🌤 Weather</button>
+    <button class='secondary' onclick="runExample('quakes')">🌍 Earthquakes</button>
+    <button class='secondary' onclick="runExample('btc')">₿ Bitcoin</button>
+    <button class='secondary' onclick="runExample('sample')">📄 Sample CSV</button>
   </div>
   <p class='muted'>Runs locally — your data never leaves this machine.</p>
 </div>
+<div class='bar'>
+  <span id='spin' class='spinner' style='display:none'></span>
+  <span id='status' class='muted'></span>
+  <span class='grow'></span>
+  <button id='dl' class='secondary' onclick='downloadReport()' disabled>⬇ Download report</button>
+</div>
 <iframe id='out' title='report'></iframe>
 <script>
+/*SAMPLE_CSV*/
 const out=document.getElementById('out'),drop=document.getElementById('drop'),
 file=document.getElementById('file'),urlIn=document.getElementById('url'),
-srcIn=document.getElementById('source');
+srcIn=document.getElementById('source'),scanBtn=document.getElementById('scanBtn'),
+spin=document.getElementById('spin'),statusEl=document.getElementById('status'),
+dl=document.getElementById('dl');
+let lastReport='';
 function show(h){out.srcdoc=h;}
 // Keep exactly one input active: touching one clears the others, so switching
 // from a file to a live source actually scans the source (not the stale file).
@@ -68,6 +105,8 @@ function keepOnly(which){
   if(which!=='url') urlIn.value='';
   if(which!=='source') srcIn.value='';
 }
+function busy(on,label){spin.style.display=on?'inline-block':'none';scanBtn.disabled=on;
+statusEl.textContent=on?(label||'scanning…'):'';}
 drop.onclick=()=>file.click();
 drop.ondragover=e=>{e.preventDefault();drop.classList.add('over');};
 drop.ondragleave=()=>drop.classList.remove('over');
@@ -78,17 +117,38 @@ srcIn.onchange=()=>{keepOnly('source');scan();};
 urlIn.oninput=()=>keepOnly('url');
 async function post(d){const r=await fetch('/scan',{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});return await r.text();}
+async function render(label,promise){
+  busy(true,label);dl.disabled=true;
+  try{const html=await promise;lastReport=html;show(html);dl.disabled=false;}
+  catch(e){show('<p style="font:15px system-ui;padding:20px;color:#cf222e">request failed: '+e+'</p>');}
+  finally{busy(false);}
+}
 async function scan(){
   const f=file.files[0],url=urlIn.value.trim(),src=srcIn.value;
-  show('<p style="font:15px system-ui;padding:20px">scanning…</p>');
-  try{
-    if(f){show(await post({mode:'csv',value:await f.text(),name:f.name}));}
-    else if(url){show(await post({mode:'url',value:url}));}
-    else if(src){show(await post({mode:'source',value:src}));}
-    else{show('<p style="font:15px system-ui;padding:20px">Choose a file, URL, or source first.</p>');}
-  }catch(e){show('<p style="font:15px system-ui;padding:20px;color:#cf222e">request failed: '+e+'</p>');}
+  if(f) render('scanning '+f.name+'…',post({mode:'csv',value:await f.text(),name:f.name}));
+  else if(url) render('fetching '+url+'…',post({mode:'url',value:url}));
+  else if(src) render('fetching '+src+'…',post({mode:'source',value:src}));
+  else show('<p style="font:15px system-ui;padding:20px">Choose a file, URL, or source — or try an example.</p>');
+}
+function runExample(kind){
+  keepOnly('none');
+  if(kind==='weather') render('fetching live weather…',post({mode:'source',value:'open-meteo'}));
+  else if(kind==='quakes') render('fetching recent earthquakes…',post({mode:'source',value:'usgs'}));
+  else if(kind==='btc') render('fetching bitcoin prices…',post({mode:'source',value:'crypto'}));
+  else render('scanning sample…',post({mode:'csv',value:SAMPLE,name:'sample.csv'}));
+}
+function downloadReport(){
+  if(!lastReport) return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([lastReport],{type:'text/html'}));
+  a.download='selfaudit-report.html';a.click();URL.revokeObjectURL(a.href);
 }
 </script></div></body></html>"""
+
+
+def _page() -> str:
+    """The index page with the sample dataset injected as a JS constant."""
+    return _INDEX.replace("/*SAMPLE_CSV*/", "const SAMPLE=" + json.dumps(_SAMPLE_CSV) + ";")
 
 
 def _error_html(message: str) -> str:
@@ -132,7 +192,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self) -> None:
-        self._send(_INDEX)
+        self._send(_page())
 
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", 0))

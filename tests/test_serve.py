@@ -24,6 +24,21 @@ def test_scan_payload_csv_returns_report() -> None:
     assert "<svg" in html  # the data chart is embedded in the report
 
 
+def test_index_page_has_examples_spinner_and_download() -> None:
+    page = serve._page()
+    assert "runExample(" in page  # one-click example buttons
+    assert "Try an example" in page
+    assert "class='spinner'" in page  # loading state
+    assert "downloadReport(" in page  # download the report
+    assert "const SAMPLE=" in page  # embedded sample injected as JS
+
+
+def test_embedded_sample_scans_to_untrusted() -> None:
+    # The 'Sample CSV' button's data has a planted gap + outlier -> UNTRUSTED.
+    html = serve.scan_payload({"mode": "csv", "value": serve._SAMPLE_CSV, "name": "sample.csv"})
+    assert "UNTRUSTED" in html
+
+
 def test_scan_payload_unknown_mode_is_friendly_error() -> None:
     html = serve.scan_payload({"mode": "bogus"})
     assert "Could not scan" in html
