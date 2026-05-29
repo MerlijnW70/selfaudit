@@ -216,6 +216,23 @@ def _strip_code_fence(text: str) -> str:
     return s.strip()
 
 
+def _parse_json_object(text: str) -> tuple[dict[str, Any] | None, ValidationResult | None]:
+    """Fence-strip and parse ``text`` as a JSON object.
+
+    Returns ``(data, None)`` on success, or ``(None, failure)`` with the
+    :class:`ValidationResult` describing why it is not a JSON object. Shared by
+    the validators so the unparseable / not-an-object branches live in one place.
+    """
+    cleaned = _strip_code_fence(text)
+    try:
+        data = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError) as exc:
+        return None, ValidationResult(False, 1, f"not valid JSON: {exc}")
+    if not isinstance(data, dict):
+        return None, ValidationResult(False, 1, "JSON is not an object")
+    return data, None
+
+
 def json_schema_validator(required: dict[str, type]) -> Validator:
     """Build a validator: the output must parse as a JSON object that contains
     each ``required`` key with a value of the given Python type.
@@ -225,13 +242,10 @@ def json_schema_validator(required: dict[str, type]) -> Validator:
     """
 
     def validate(text: str) -> ValidationResult:
-        cleaned = _strip_code_fence(text)
-        try:
-            data = json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError) as exc:
-            return ValidationResult(False, 1, f"not valid JSON: {exc}")
-        if not isinstance(data, dict):
-            return ValidationResult(False, 1, "JSON is not an object")
+        data, failure = _parse_json_object(text)
+        if failure is not None:
+            return failure
+        assert data is not None
         problems: list[str] = []
         for key, typ in required.items():
             if key not in data:
@@ -254,13 +268,10 @@ def exact_field_validator(key: str, expected: object) -> Validator:
     """
 
     def validate(text: str) -> ValidationResult:
-        cleaned = _strip_code_fence(text)
-        try:
-            data = json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError) as exc:
-            return ValidationResult(False, 1, f"not valid JSON: {exc}")
-        if not isinstance(data, dict):
-            return ValidationResult(False, 1, "JSON is not an object")
+        data, failure = _parse_json_object(text)
+        if failure is not None:
+            return failure
+        assert data is not None
         if key not in data:
             return ValidationResult(False, 1, f"missing key '{key}'")
         if data[key] != expected:
