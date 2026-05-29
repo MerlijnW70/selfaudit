@@ -41,13 +41,13 @@ def _task() -> Task:
     return Task("person-json", _PROMPT, json_schema_validator(_REQUIRED))
 
 
-# A deliberately hard live task: multi-digit multiplication with "JSON only, no
-# prose" suppresses the model's scratch space. The validator computes the truth
-# itself, so it cannot be fooled by a confident-but-wrong answer — in practice
-# every tier tends to miscompute, so the ladder escalates fully and honestly
-# reports `unvalidated` rather than accepting a plausible wrong number. That is
-# the whole point: an objective invariant prevents false positives.
-_A, _B = 739_613, 856_447
+# A "sweet spot" live task: 4x4-digit multiplication with "JSON only, no prose"
+# suppresses scratch space. Calibrated (probed live) so weaker tiers reliably
+# miscompute while the strongest tier gets it right — i.e. it demonstrates a real
+# escalate-THEN-succeed. The validator computes the truth itself, so a confident
+# wrong answer cannot pass. (Models are non-deterministic; the exact tier that
+# first succeeds may vary, but the ladder is what matters.)
+_A, _B = 6837, 4926
 _HARD_PROMPT = (
     f'Compute {_A} * {_B} exactly. Return ONLY a JSON object {{"product": <integer>}} '
     f"with the exact integer result. No prose, no markdown, no commas in the number."
@@ -125,7 +125,7 @@ def main() -> None:
             print("(TLS verification routed through the OS trust store via truststore.)")
         print("\n-- live task A: produce valid person JSON --")
         print(_run(SelfAuditingValidator(default_tiers()), task).render())
-        print("\n-- live task B: exact multi-digit arithmetic (stresses weaker tiers) --")
+        print("\n-- live task B: 4x4 multiplication (weak tiers fail, strongest validates) --")
         print(_run(SelfAuditingValidator(default_tiers()), _hard_task()).render())
     else:
         print("\n(no ANTHROPIC_API_KEY set — skipping the live run.)")
