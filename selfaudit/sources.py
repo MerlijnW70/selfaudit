@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from typing import Any
@@ -32,11 +33,20 @@ class SourceUnavailable(Exception):
 _USER_AGENT = "selfaudit/0.1 (+https://github.com/MerlijnW70/selfaudit)"
 
 
+def _http_request(url: str) -> urllib.request.Request:
+    """Build a request, rejecting non-http(s) schemes (no file://, ftp://, …) so a
+    URL can't be turned into a local-file read or other SSRF vector."""
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise SourceUnavailable(f"only http/https URLs are allowed, got {scheme or 'no'!r} scheme")
+    return urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+
+
 def _fetch_json(url: str, *, timeout: float = 20.0) -> dict[str, Any]:
     enable_os_truststore()  # secure proxy fix; a no-op when not needed
-    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    req = _http_request(url)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - https only
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - scheme checked
             payload = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
         raise SourceUnavailable(f"could not fetch {url}: {exc}") from exc
@@ -56,9 +66,9 @@ def fetch_csv(url: str, *, timeout: float = 20.0) -> Dataset:
     surfaces as :class:`SourceUnavailable`.
     """
     enable_os_truststore()
-    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    req = _http_request(url)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - http(s) only
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - scheme checked
             text = resp.read().decode("utf-8")
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
         raise SourceUnavailable(f"could not fetch {url}: {exc}") from exc

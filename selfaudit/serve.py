@@ -19,6 +19,8 @@ from .datasets import Dataset, infer_checks, parse_text, parse_xlsx_bytes, svg_c
 from .datasetscanner import SelfAuditingDatasetScanner
 from .sources import SourceUnavailable, crypto_prices, fetch_csv, open_meteo, usgs_earthquakes
 
+_MAX_UPLOAD = 256 * 1024 * 1024  # cap a /scan request body (bound memory on upload)
+
 _SOURCES: dict[str, Callable[..., Dataset]] = {
     "open-meteo": open_meteo,
     "usgs": usgs_earthquakes,
@@ -210,6 +212,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", 0))
+        if length > _MAX_UPLOAD:
+            self._send(_error_html("request too large"), 413)
+            return
         raw = self.rfile.read(length).decode("utf-8") if length else "{}"
         try:
             data = json.loads(raw)

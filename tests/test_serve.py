@@ -120,6 +120,28 @@ def test_server_serves_index_and_scans() -> None:
         server.server_close()
 
 
+def test_server_rejects_oversized_upload(monkeypatch) -> None:
+    monkeypatch.setattr(serve, "_MAX_UPLOAD", 10)  # tiny cap for the test
+    server = serve.build_server(("127.0.0.1", 0))
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/scan",
+            b'{"mode":"csv","value":"way too long"}',
+            {"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            raise AssertionError("expected HTTP 413")
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 413
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_server_rejects_bad_json() -> None:
     server = serve.build_server(("127.0.0.1", 0))
     port = server.server_address[1]

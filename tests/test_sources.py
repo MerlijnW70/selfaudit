@@ -136,6 +136,13 @@ def test_fetch_csv_parses_a_url(monkeypatch) -> None:
     assert ds.name == "https://example.com/d.csv"
 
 
+def test_fetch_rejects_non_http_schemes() -> None:
+    # No local-file reads / SSRF via file://, ftp://, etc.
+    for bad in ("file:///etc/passwd", "ftp://host/x", "/local/path.csv"):
+        with pytest.raises(SourceUnavailable):
+            fetch_csv(bad)
+
+
 def test_fetch_csv_network_error_is_clean(monkeypatch) -> None:
     def boom(req, timeout=20.0):
         raise urllib.error.URLError("no route")
